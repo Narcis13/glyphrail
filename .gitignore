@@ -1,0 +1,4 @@
+node_modules
+.glyphrail/
+coverage
+*.log

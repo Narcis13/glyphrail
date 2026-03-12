@@ -1,0 +1,21 @@
+{
+  "name": "glyphrail",
+  "version": "0.1.0",
+  "description": "CLI-first workflow orchestration for deterministic, AI-native runs",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./cli": "./src/cli/index.ts"
+  },
+  "bin": {
+    "glyphrail": "./bin/glyphrail",
+    "gr": "./bin/gr"
+  },
+  "scripts": {
+    "dev": "bun run src/cli/index.ts",
+    "test": "bun test"
+  },
+  "engines": {
+    "bun": ">=1.3.0"
+  }
+}
