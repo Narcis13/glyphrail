@@ -12,6 +12,9 @@ export interface StructuredAgentRequest {
   input?: JsonValue;
   outputSchema?: JsonSchema;
   timeoutMs?: number;
+  prompt: string;
+  attempt: number;
+  meta?: Record<string, unknown>;
 }
 
 export type StructuredAgentResult =

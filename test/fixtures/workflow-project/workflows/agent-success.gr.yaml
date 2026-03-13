@@ -1,0 +1,44 @@
+version: "1.0"
+name: agent-success-demo
+description: Structured agent success using the built-in mock adapter
+
+state:
+  goal: select vendor
+  decision: null
+
+steps:
+  - id: analyze
+    kind: agent
+    mode: structured
+    provider: mock
+    model: mock
+    objective: Determine whether evidence is sufficient
+    instructions: |
+      Return strict JSON only.
+      Be conservative.
+    input:
+      goal: ${state.goal}
+      vendors:
+        - alpha
+        - beta
+    outputSchema:
+      type: object
+      properties:
+        enoughEvidence:
+          type: boolean
+        reason:
+          type: string
+      required: [enoughEvidence, reason]
+      additionalProperties: false
+    save: state.decision
+    meta:
+      mockResponse:
+        rawOutput: |
+          ```json
+          {"enoughEvidence":true,"reason":"Two vendors are enough for the demo."}
+          ```
+
+  - id: done
+    kind: return
+    output:
+      decision: ${state.decision}

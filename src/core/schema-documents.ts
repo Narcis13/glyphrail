@@ -1,6 +1,6 @@
 import { WORKFLOW_STEP_KINDS } from "./ast";
 import { TRACE_EVENT_TYPES } from "./events";
-import { RUN_STATUSES, STEP_STATUSES } from "./run-record";
+import { CURSOR_FRAME_KINDS, RUN_STATUSES, STEP_STATUSES } from "./run-record";
 import { workflowDocumentSchema } from "../dsl/workflow-schema";
 
 export interface SchemaCatalogEntry {
@@ -125,6 +125,31 @@ export const SCHEMA_CATALOG: SchemaCatalogEntry[] = [
         startedAt: { type: "string" },
         completedAt: { type: "string" },
         currentStepId: { type: "string" },
+        elapsedMs: { type: "integer" },
+        visitedSteps: { type: "integer" },
+        cursor: {
+          type: "object",
+          properties: {
+            frames: {
+              type: "array",
+              items: {
+                type: "object",
+                properties: {
+                  kind: { enum: CURSOR_FRAME_KINDS },
+                  stepId: { type: "string" },
+                  branch: { enum: ["then", "else"] },
+                  as: { type: "string" },
+                  itemIndex: { type: "integer" },
+                  iteration: { type: "integer" },
+                  nextIndex: { type: "integer" },
+                  items: {
+                    type: "array"
+                  }
+                }
+              }
+            }
+          }
+        },
         counters: {
           type: "object",
           properties: {
@@ -133,6 +158,12 @@ export const SCHEMA_CATALOG: SchemaCatalogEntry[] = [
             retries: { type: "integer" },
             loopIterations: { type: "integer" },
             checkpoints: { type: "integer" }
+          }
+        },
+        retryCounters: {
+          type: "object",
+          additionalProperties: {
+            type: "integer"
           }
         },
         policies: {

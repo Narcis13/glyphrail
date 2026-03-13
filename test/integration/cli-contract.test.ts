@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { mkdtemp, readFile, stat } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, stat, symlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -8,19 +8,32 @@ const repoRoot = dirname(dirname(dirname(fileURLToPath(import.meta.url))));
 const cliEntry = join(repoRoot, "src/cli/index.ts");
 const fixturesRoot = join(repoRoot, "test/fixtures/init-project");
 
-test("capabilities emits the Slice 3 JSON contract", () => {
+test("capabilities emits the Slice 6 JSON contract", () => {
   const result = runCli(["capabilities", "--json"], repoRoot);
   const payload = parseJsonOutput(result.stdout);
 
   expect(result.exitCode).toBe(0);
   expect(payload.ok).toBe(true);
   expect(payload.name).toBe("glyphrail");
+  expect(payload.slice).toBe(6);
   expect(payload.commands).toContain("init");
+  expect(payload.commands).toContain("check");
+  expect(payload.commands).toContain("tool list");
+  expect(payload.commands).toContain("tool call");
   expect(payload.commands).toContain("workflow create");
   expect(payload.commands).toContain("run");
+  expect(payload.commands).toContain("resume");
+  expect(payload.commands).toContain("runs list");
   expect(payload.commands).toContain("runs show");
+  expect(payload.commands).toContain("runs step");
+  expect(payload.commands).toContain("runs explain");
   expect(payload.features.execution).toBe(true);
+  expect(payload.features.resume).toBe(true);
+  expect(payload.features.runsList).toBe(true);
+  expect(payload.features.tools).toBe(true);
   expect(payload.features.trace).toBe(true);
+  expect(payload.features.structuredAgent).toBe(true);
+  expect(payload.features.projectCheck).toBe(true);
 });
 
 test("schema emits machine-readable schema documents", () => {
@@ -78,8 +91,27 @@ test("workflow create scaffolds into the configured workflows directory", async 
   expect(generatedWorkflow).toContain("kind: assign");
 });
 
+test("check validates a clean initialized project", async () => {
+  const tempDir = await mkdtemp(join(tmpdir(), "glyphrail-check-"));
+  const initResult = runCli(["--cwd", tempDir, "init", "--json"], repoRoot);
+  expect(initResult.exitCode).toBe(0);
+
+  await mkdir(join(tempDir, "node_modules"), { recursive: true });
+  await symlink(repoRoot, join(tempDir, "node_modules/glyphrail"), "dir");
+
+  const result = runCli(["--cwd", tempDir, "check", "--json"], repoRoot);
+  const payload = parseJsonOutput(result.stdout);
+
+  expect(result.exitCode).toBe(0);
+  expect(payload.ok).toBe(true);
+  expect(payload.command).toBe("check");
+  expect(payload.workflows.errorCount).toBe(0);
+  expect(payload.tools.issues).toEqual([]);
+  expect(payload.tools.toolCount).toBeGreaterThan(0);
+});
+
 function runCli(args: string[], cwd: string) {
-  const processResult = Bun.spawnSync(["bun", "run", cliEntry, ...args], {
+  const processResult = Bun.spawnSync(["bun", cliEntry, ...args], {
     cwd,
     stdout: "pipe",
     stderr: "pipe"

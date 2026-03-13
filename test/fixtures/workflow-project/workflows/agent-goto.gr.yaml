@@ -1,0 +1,50 @@
+version: "1.0"
+name: agent-goto-demo
+description: Structured agent failure that jumps to a fallback step
+
+state:
+  primary: null
+  path: pending
+  skipped: false
+
+steps:
+  - id: analyze
+    kind: agent
+    mode: structured
+    provider: mock
+    model: mock
+    objective: Produce a valid fallback-safe result
+    input:
+      goal: goto-demo
+    outputSchema:
+      type: object
+      properties:
+        ok:
+          type: boolean
+      required: [ok]
+      additionalProperties: false
+    save: state.primary
+    onError:
+      strategy: goto
+      goto: fallback
+    meta:
+      mockResponse:
+        output:
+          ok: "no"
+
+  - id: should_skip
+    kind: assign
+    set:
+      skipped: true
+
+  - id: fallback
+    kind: assign
+    set:
+      path: fallback
+
+  - id: done
+    kind: return
+    output:
+      primary: ${state.primary}
+      path: ${state.path}
+      skipped: ${state.skipped}

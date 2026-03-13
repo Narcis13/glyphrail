@@ -1,0 +1,35 @@
+version: "1.0"
+name: agent-validation-failure-demo
+description: Structured agent step that fails output validation
+
+state:
+  verdict: null
+
+steps:
+  - id: analyze
+    kind: agent
+    mode: structured
+    provider: mock
+    model: mock
+    objective: Return a validation-ready verdict
+    input:
+      topic: demo
+    outputSchema:
+      type: object
+      properties:
+        enoughEvidence:
+          type: boolean
+        reason:
+          type: string
+      required: [enoughEvidence, reason]
+      additionalProperties: false
+    save: state.verdict
+    meta:
+      mockResponse:
+        output:
+          enoughEvidence: "yes"
+
+  - id: done
+    kind: return
+    output:
+      verdict: ${state.verdict}

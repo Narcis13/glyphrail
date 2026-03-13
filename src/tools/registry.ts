@@ -2,12 +2,29 @@ import { dirname, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
 import { createFailure, EXIT_CODES } from "../core/errors";
-import type { Tool } from "./contracts";
+import type { JsonSchema } from "../core/json-schema";
+import { validateSchemaDefinition } from "../core/schema-validator";
+import type { Tool, ToolCategoryTag, ToolSideEffect } from "./contracts";
 import { readTextFile, pathExists } from "../util/fs";
 
 export interface ToolRegistryPreview {
   toolNames: string[];
   unresolvedIdentifiers: string[];
+}
+
+export interface ToolContractIssue {
+  path: string;
+  message: string;
+}
+
+export interface ToolDescriptor {
+  name: string;
+  description: string;
+  inputSchema: JsonSchema;
+  outputSchema?: JsonSchema;
+  sideEffect: ToolSideEffect;
+  timeoutMs?: number;
+  tags: ToolCategoryTag[];
 }
 
 interface ParsedModule {
@@ -82,11 +99,142 @@ export async function loadDeclaredTools(entryPath: string): Promise<Tool[]> {
     );
   }
 
+  const seenToolNames = new Set<string>();
   for (const [index, tool] of exportedValue.entries()) {
     validateToolShape(tool, entryPath, index);
+
+    if (seenToolNames.has(tool.name)) {
+      throw createFailure(
+        "TOOL_VALIDATION_ERROR",
+        `Tool '${tool.name}' is declared more than once in ${entryPath}.`,
+        EXIT_CODES.genericFailure,
+        {
+          tool: tool.name,
+          path: "$.name",
+          index
+        }
+      );
+    }
+
+    seenToolNames.add(tool.name);
   }
 
   return exportedValue as Tool[];
+}
+
+export function toToolDescriptor(tool: Tool): ToolDescriptor {
+  return {
+    name: tool.name,
+    description: tool.description,
+    inputSchema: tool.inputSchema,
+    outputSchema: tool.outputSchema,
+    sideEffect: tool.sideEffect,
+    timeoutMs: tool.timeoutMs,
+    tags: [...(tool.tags ?? [])]
+  };
+}
+
+export function getToolContractIssues(tool: unknown): ToolContractIssue[] {
+  const issues: ToolContractIssue[] = [];
+
+  if (!tool || typeof tool !== "object" || Array.isArray(tool)) {
+    return [
+      {
+        path: "$",
+        message: "Tool must be an object."
+      }
+    ];
+  }
+
+  const candidate = tool as Partial<Tool>;
+
+  if (typeof candidate.name !== "string" || candidate.name.trim().length === 0) {
+    issues.push({
+      path: "$.name",
+      message: "name must be a non-empty string."
+    });
+  }
+
+  if (typeof candidate.description !== "string" || candidate.description.trim().length === 0) {
+    issues.push({
+      path: "$.description",
+      message: "description must be a non-empty string."
+    });
+  }
+
+  if (!isJsonSchemaObject(candidate.inputSchema)) {
+    issues.push({
+      path: "$.inputSchema",
+      message: "inputSchema must be a JSON schema object."
+    });
+  } else {
+    issues.push(...prefixSchemaIssues("$.inputSchema", validateSchemaDefinition(candidate.inputSchema)));
+  }
+
+  if (candidate.outputSchema !== undefined) {
+    if (!isJsonSchemaObject(candidate.outputSchema)) {
+      issues.push({
+        path: "$.outputSchema",
+        message: "outputSchema must be a JSON schema object when provided."
+      });
+    } else {
+      issues.push(...prefixSchemaIssues("$.outputSchema", validateSchemaDefinition(candidate.outputSchema)));
+    }
+  }
+
+  if (
+    candidate.sideEffect !== "none" &&
+    candidate.sideEffect !== "read" &&
+    candidate.sideEffect !== "write" &&
+    candidate.sideEffect !== "external"
+  ) {
+    issues.push({
+      path: "$.sideEffect",
+      message: "sideEffect must be one of: none, read, write, external."
+    });
+  }
+
+  if (candidate.timeoutMs !== undefined && (!Number.isInteger(candidate.timeoutMs) || candidate.timeoutMs < 0)) {
+    issues.push({
+      path: "$.timeoutMs",
+      message: "timeoutMs must be a non-negative integer when provided."
+    });
+  }
+
+  if (candidate.tags !== undefined) {
+    if (!Array.isArray(candidate.tags)) {
+      issues.push({
+        path: "$.tags",
+        message: "tags must be an array when provided."
+      });
+    } else {
+      for (const [index, tag] of candidate.tags.entries()) {
+        if (
+          tag !== "io" &&
+          tag !== "http" &&
+          tag !== "file" &&
+          tag !== "compute" &&
+          tag !== "ai" &&
+          tag !== "db" &&
+          tag !== "unsafe"
+        ) {
+          issues.push({
+            path: `$.tags[${index}]`,
+            message: `Unsupported tag '${String(tag)}'.`
+          });
+        }
+      }
+    }
+  }
+
+  if (typeof candidate.execute !== "function") {
+    issues.push({
+      path: "$.execute",
+      message: "execute must be a function."
+    });
+  }
+
+  return issues;
 }
 
 async function resolveToolIdentifier(
@@ -237,24 +385,26 @@ async function resolveImportPath(baseDir: string, importPath: string): Promise<s
 }
 
 function validateToolShape(tool: unknown, entryPath: string, index: number): asserts tool is Tool {
-  if (!tool || typeof tool !== "object" || Array.isArray(tool)) {
+  const issues = getToolContractIssues(tool);
+  if (issues.length > 0) {
     throw createFailure(
-      "GENERIC_FAILURE",
-      `Tool export at index ${index} in ${entryPath} is not an object.`,
-      EXIT_CODES.genericFailure
+      "TOOL_VALIDATION_ERROR",
+      `Tool export at index ${index} in ${entryPath} failed contract validation.`,
+      EXIT_CODES.genericFailure,
+      {
+        issues
+      }
     );
   }
+}
 
-  const candidate = tool as Partial<Tool>;
-  if (
-    typeof candidate.name !== "string" ||
-    typeof candidate.description !== "string" ||
-    typeof candidate.execute !== "function"
-  ) {
-    throw createFailure(
-      "GENERIC_FAILURE",
-      `Tool export at index ${index} in ${entryPath} is missing required fields.`,
-      EXIT_CODES.genericFailure
-    );
-  }
+function isJsonSchemaObject(value: unknown): value is JsonSchema {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function prefixSchemaIssues(prefix: string, issues: ToolContractIssue[]): ToolContractIssue[] {
+  return issues.map((issue) => ({
+    path: `${prefix}${issue.path.slice(1)}`,
+    message: issue.message
+  }));
 }

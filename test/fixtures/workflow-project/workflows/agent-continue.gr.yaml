@@ -1,0 +1,42 @@
+version: "1.0"
+name: agent-continue-demo
+description: Structured agent failure that continues to the next step
+
+state:
+  primary: null
+  status: initial
+
+steps:
+  - id: analyze
+    kind: agent
+    mode: structured
+    provider: mock
+    model: mock
+    objective: Produce a valid boolean result
+    input:
+      goal: continue-demo
+    outputSchema:
+      type: object
+      properties:
+        ok:
+          type: boolean
+      required: [ok]
+      additionalProperties: false
+    save: state.primary
+    onError:
+      strategy: continue
+    meta:
+      mockResponse:
+        output:
+          ok: "no"
+
+  - id: mark_continued
+    kind: assign
+    set:
+      status: continued
+
+  - id: done
+    kind: return
+    output:
+      primary: ${state.primary}
+      status: ${state.status}

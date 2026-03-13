@@ -1,3 +1,5 @@
+import { ON_ERROR_STRATEGIES } from "../core/error-policy";
+
 export const workflowDocumentSchema = {
   $schema: "https://json-schema.org/draft/2020-12/schema",
   title: "GlyphrailWorkflowDocument",
@@ -60,7 +62,25 @@ export const workflowDocumentSchema = {
         name: { type: "string" },
         description: { type: "string" },
         when: { type: "string" },
-        timeoutMs: { type: "integer" }
+        timeoutMs: { type: "integer" },
+        onError: {
+          type: "object",
+          properties: {
+            strategy: {
+              enum: [...ON_ERROR_STRATEGIES]
+            },
+            maxAttempts: { type: "integer" },
+            goto: { type: "string" },
+            retry: {
+              type: "object",
+              properties: {
+                maxAttempts: { type: "integer" }
+              },
+              additionalProperties: true
+            }
+          },
+          additionalProperties: true
+        }
       },
       additionalProperties: true
     },

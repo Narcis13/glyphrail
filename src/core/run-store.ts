@@ -1,4 +1,4 @@
-import { appendFile, mkdir } from "node:fs/promises";
+import { appendFile, mkdir, readdir } from "node:fs/promises";
 import { resolve } from "node:path";
 
 import type { ResolvedProjectConfig } from "../config";
@@ -6,7 +6,7 @@ import { relativePath, readTextFile, writeTextFile } from "../util/fs";
 import { readJsonFile, writeJsonFile } from "../util/json";
 import type { TraceEvent } from "./events";
 import type { JsonObject, JsonValue } from "./json-schema";
-import type { RunArtifactPaths, RunRecord } from "./run-record";
+import type { ExecutionCursor, RunArtifactPaths, RunRecord } from "./run-record";
 
 export interface RunPaths extends RunArtifactPaths {
   runDir: string;
@@ -17,10 +17,14 @@ export interface RunCheckpoint {
   checkpoint: number;
   ts: string;
   currentStepId?: string;
+  cursor: ExecutionCursor;
+  elapsedMs: number;
+  visitedSteps: number;
   state: JsonObject;
   context: JsonObject;
   system: JsonObject;
   counters: RunRecord["counters"];
+  retryCounters: Record<string, number>;
 }
 
 export function getRunPaths(project: ResolvedProjectConfig, runId: string): RunPaths {
@@ -94,6 +98,36 @@ export async function readRunTrace(paths: RunPaths): Promise<TraceEvent[]> {
     .map((line) => line.trim())
     .filter(Boolean)
     .map((line) => JSON.parse(line) as TraceEvent);
+}
+
+export async function listRunRecords(project: ResolvedProjectConfig): Promise<RunRecord[]> {
+  const runsRoot = resolve(project.projectRoot, project.config.runsDir);
+
+  let entries: Awaited<ReturnType<typeof readdir>>;
+  try {
+    entries = await readdir(runsRoot, { withFileTypes: true });
+  } catch {
+    return [];
+  }
+
+  const records = await Promise.all(
+    entries
+      .filter((entry) => entry.isDirectory() && entry.name.startsWith("run_"))
+      .map(async (entry) => {
+        const runId = normalizeRunId(entry.name);
+        const paths = getRunPaths(project, runId);
+
+        try {
+          return await readRunMeta(paths);
+        } catch {
+          return undefined;
+        }
+      })
+  );
+
+  return records
+    .filter((record): record is RunRecord => Boolean(record))
+    .sort((left, right) => right.startedAt.localeCompare(left.startedAt));
 }
 
 export function toArtifactPaths(paths: RunPaths, project: ResolvedProjectConfig): RunArtifactPaths {

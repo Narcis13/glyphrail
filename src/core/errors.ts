@@ -99,6 +99,7 @@ export function exitCodeForErrorCode(code: string): number {
     code === "TOOL_INPUT_VALIDATION_ERROR" ||
     code === "TOOL_RUNTIME_ERROR" ||
     code === "TOOL_OUTPUT_VALIDATION_ERROR" ||
+    code === "AGENT_RUNTIME_ERROR" ||
     code === "OUTPUT_VALIDATION_ERROR" ||
     code === "AGENT_OUTPUT_PARSE_ERROR" ||
     code === "AGENT_OUTPUT_VALIDATION_ERROR" ||
@@ -111,6 +112,10 @@ export function exitCodeForErrorCode(code: string): number {
 
   if (code === "POLICY_VIOLATION") {
     return EXIT_CODES.policyViolation;
+  }
+
+  if (code === "TOOL_VALIDATION_ERROR") {
+    return EXIT_CODES.genericFailure;
   }
 
   if (code === "NOT_FOUND") {

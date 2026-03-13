@@ -24,8 +24,9 @@ export const runsShowCommand: CommandDefinition = {
         meta.completedAt ? `Completed: ${meta.completedAt}` : undefined,
         meta.currentStepId ? `Current step: ${meta.currentStepId}` : undefined,
         meta.counters
-          ? `Counters: completed=${meta.counters.completedSteps}, failed=${meta.counters.failedSteps}, loops=${meta.counters.loopIterations}, checkpoints=${meta.counters.checkpoints}`
+          ? `Counters: completed=${meta.counters.completedSteps}, failed=${meta.counters.failedSteps}, retries=${meta.counters.retries}, loops=${meta.counters.loopIterations}, checkpoints=${meta.counters.checkpoints}`
           : undefined,
+        meta.retryCounters ? `Retry counters: ${JSON.stringify(meta.retryCounters)}` : undefined,
         meta.artifactPaths ? `Artifacts: ${Object.values(meta.artifactPaths).join(", ")}` : undefined
       ]
         .filter((line): line is string => Boolean(line))

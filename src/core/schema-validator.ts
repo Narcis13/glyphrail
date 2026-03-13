@@ -35,6 +35,12 @@ interface ValidationContext {
   subject: string;
 }
 
+export function validateSchemaDefinition(schema: unknown): SchemaValidationIssue[] {
+  const issues: SchemaValidationIssue[] = [];
+  collectSchemaDefinitionIssues(schema, "$", issues);
+  return issues;
+}
+
 export function assertJsonSchema(
   value: unknown,
   schema: JsonSchema,
@@ -65,7 +71,7 @@ function collectSchemaIssues(
   path: string,
   issues: SchemaValidationIssue[]
 ): void {
-  validateSchemaShape(schema, path, issues);
+  collectUnsupportedKeywordIssues(schema, path, issues);
 
   if (schema.const !== undefined && !isDeepStrictEqual(value, schema.const)) {
     issues.push({
@@ -138,7 +144,70 @@ function collectSchemaIssues(
   }
 }
 
-function validateSchemaShape(schema: JsonSchema, path: string, issues: SchemaValidationIssue[]): void {
+function collectSchemaDefinitionIssues(
+  schema: unknown,
+  path: string,
+  issues: SchemaValidationIssue[]
+): void {
+  if (!isJsonSchema(schema)) {
+    issues.push({
+      path,
+      message: "Schema must be an object."
+    });
+    return;
+  }
+
+  collectUnsupportedKeywordIssues(schema, path, issues);
+
+  if (schema.properties !== undefined) {
+    if (!isJsonObject(schema.properties)) {
+      issues.push({
+        path: `${path}.properties`,
+        message: "properties must be an object."
+      });
+    } else {
+      for (const [key, propertySchema] of Object.entries(schema.properties)) {
+        collectSchemaDefinitionIssues(propertySchema, `${path}.properties.${key}`, issues);
+      }
+    }
+  }
+
+  if (schema.items !== undefined) {
+    collectSchemaDefinitionIssues(schema.items, `${path}.items`, issues);
+  }
+
+  if (schema.additionalProperties !== undefined && schema.additionalProperties !== false && schema.additionalProperties !== true) {
+    collectSchemaDefinitionIssues(schema.additionalProperties, `${path}.additionalProperties`, issues);
+  }
+
+  if (schema.oneOf !== undefined) {
+    if (!Array.isArray(schema.oneOf)) {
+      issues.push({
+        path: `${path}.oneOf`,
+        message: "oneOf must be an array."
+      });
+    } else {
+      for (const [index, candidate] of schema.oneOf.entries()) {
+        collectSchemaDefinitionIssues(candidate, `${path}.oneOf[${index}]`, issues);
+      }
+    }
+  }
+
+  if (schema.anyOf !== undefined) {
+    if (!Array.isArray(schema.anyOf)) {
+      issues.push({
+        path: `${path}.anyOf`,
+        message: "anyOf must be an array."
+      });
+    } else {
+      for (const [index, candidate] of schema.anyOf.entries()) {
+        collectSchemaDefinitionIssues(candidate, `${path}.anyOf[${index}]`, issues);
+      }
+    }
+  }
+}
+
+function collectUnsupportedKeywordIssues(schema: JsonSchema, path: string, issues: SchemaValidationIssue[]): void {
   for (const key of Object.keys(schema)) {
     if (!SUPPORTED_SCHEMA_KEYS.has(key)) {
       issues.push({

@@ -13,7 +13,14 @@ const fixtureProjectRoot = join(repoRoot, "test/fixtures/workflow-project");
 test("tool discovery finds inline tool declarations in glyphrail.tools.ts", async () => {
   const preview = await discoverDeclaredTools(join(fixtureProjectRoot, "glyphrail.tools.ts"));
 
-  expect(preview.toolNames).toEqual(["makeGreeting", "selectVendor"]);
+  expect(preview.toolNames).toEqual([
+    "alwaysFails",
+    "formatHandle",
+    "interruptOnce",
+    "makeGreeting",
+    "selectVendor",
+    "sendWebhook"
+  ]);
   expect(preview.unresolvedIdentifiers).toEqual([]);
 });
 
@@ -26,6 +33,36 @@ test("validation reports missing maxIterations, duplicate ids, and undeclared to
   expect(result.workflow).toBeUndefined();
   expect(result.errors.map((error) => error.code)).toContain("MISSING_MAX_ITERATIONS");
   expect(result.errors.map((error) => error.code)).toContain("INVALID_WRITE_DIRECTIVE");
+});
+
+test("validation rejects unsupported agent modes and invalid reduced onError policies", async () => {
+  const result = await validateWorkflowDocument(
+    {
+      version: "1.0",
+      name: "invalid-agent-policy",
+      steps: [
+        {
+          id: "analyze",
+          kind: "agent",
+          mode: "tool-use",
+          objective: "demo",
+          onError: {
+            strategy: "goto",
+            goto: "missing_step",
+            set: {
+              ignored: true
+            }
+          }
+        }
+      ]
+    },
+    {
+      toolsEntryPath: join(fixtureProjectRoot, "glyphrail.tools.ts")
+    }
+  );
+
+  expect(result.errors.map((error) => error.code)).toContain("UNSUPPORTED_AGENT_MODE");
+  expect(result.errors.map((error) => error.code)).toContain("INVALID_FIELD");
 });
 
 test("normalization keeps a single JSON-compatible workflow shape", async () => {

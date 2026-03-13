@@ -121,8 +121,17 @@ export async function loadPersistedRun(
     );
   }
 
+  return loadPersistedRunById(context, args.positionals[0]);
+}
+
+export { readRunOutput, readRunState, readRunTrace };
+
+export async function loadPersistedRunById(
+  context: CommandContext,
+  rawRunId: string
+): Promise<LoadedRunArtifacts> {
   const project = await context.getProjectConfig();
-  const runId = normalizeRunId(args.positionals[0]);
+  const runId = normalizeRunId(rawRunId);
   const paths = getRunPaths(project, runId);
 
   try {
@@ -140,8 +149,6 @@ export async function loadPersistedRun(
     );
   }
 }
-
-export { readRunOutput, readRunState, readRunTrace };
 
 function parseCliValue(rawValue: string): JsonValue {
   if (rawValue.length === 0) {

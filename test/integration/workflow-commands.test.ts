@@ -71,7 +71,7 @@ test("workflow validate returns the documented error envelope for invalid workfl
 });
 
 function runCli(args: string[], cwd: string) {
-  const processResult = Bun.spawnSync(["bun", "run", cliEntry, ...args], {
+  const processResult = Bun.spawnSync(["bun", cliEntry, ...args], {
     cwd,
     stdout: "pipe",
     stderr: "pipe"

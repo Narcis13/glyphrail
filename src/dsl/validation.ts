@@ -7,6 +7,7 @@ import {
   type ExpressionNode,
   type ExpressionReference
 } from "../core/expression-engine";
+import { isOnErrorStrategy, resolveOnErrorPolicy } from "../core/error-policy";
 import { flattenWorkflowSteps, getStepWriteTargets, normalizeStatePath, normalizeWorkflowDocument, type StepInventoryItem } from "./normalization";
 import { discoverDeclaredTools } from "../tools/registry";
 
@@ -127,6 +128,7 @@ export async function validateWorkflowDocument(
 
   validateDuplicateStepIds(inventory, issueState);
   validateDeclaredTools(referencedTools, declaredToolsPreview.toolNames, issueState);
+  validateOnErrorGotoTargets(workflow, inventory, issueState);
 
   if (issueState.errors.length > 0) {
     return {
@@ -329,7 +331,9 @@ function validateStep(value: unknown, path: string, state: MutableIssueState): v
   validateOptionalString(value.name, `${path}.name`, state, stepId);
   validateOptionalString(value.description, `${path}.description`, state, stepId);
   validateOptionalNumber(value.timeoutMs, `${path}.timeoutMs`, state, stepId);
-  validateOptionalObject(value.onError, `${path}.onError`, state, stepId);
+  if (value.onError !== undefined) {
+    validateOnErrorPolicy(value.onError, `${path}.onError`, state, stepId);
+  }
   validateOptionalObject(value.meta, `${path}.meta`, state, stepId);
 
   if (value.when !== undefined) {
@@ -410,6 +414,28 @@ function validateAgentStep(
   stepId?: string
 ): void {
   validateOptionalString(value.mode, `${path}.mode`, state, stepId);
+  if (typeof value.mode === "string" && value.mode !== "structured" && value.mode !== "tool-use") {
+    state.errors.push(
+      makeIssue(
+        "INVALID_FIELD",
+        "agent.mode must be 'structured' or 'tool-use'.",
+        `${path}.mode`,
+        "error",
+        stepId
+      )
+    );
+  }
+  if (value.mode === "tool-use") {
+    state.errors.push(
+      makeIssue(
+        "UNSUPPORTED_AGENT_MODE",
+        "agent.mode=tool-use is not supported in the current MVP slice.",
+        `${path}.mode`,
+        "error",
+        stepId
+      )
+    );
+  }
   validateOptionalString(value.provider, `${path}.provider`, state, stepId);
   validateOptionalString(value.model, `${path}.model`, state, stepId);
   validateRequiredString(value.objective, `${path}.objective`, state, stepId);
@@ -536,6 +562,109 @@ function validateWriteDirectives(
   }
 }
 
+function validateOnErrorPolicy(
+  value: unknown,
+  path: string,
+  state: MutableIssueState,
+  stepId?: string
+): void {
+  if (!isPlainObject(value)) {
+    state.errors.push(makeIssue("INVALID_FIELD", `Expected object at ${path}.`, path, "error", stepId));
+    return;
+  }
+
+  const supportedFields = new Set(["strategy", "maxAttempts", "goto", "retry"]);
+  for (const field of Object.keys(value)) {
+    if (!supportedFields.has(field)) {
+      state.errors.push(
+        makeIssue(
+          "INVALID_FIELD",
+          `Unsupported onError field '${field}' in reduced MVP policy shape.`,
+          `${path}.${field}`,
+          "error",
+          stepId
+        )
+      );
+    }
+  }
+
+  if (value.strategy !== undefined && !isOnErrorStrategy(value.strategy)) {
+    state.errors.push(
+      makeIssue(
+        "INVALID_FIELD",
+        "onError.strategy must be one of retry, fail, continue, or goto.",
+        `${path}.strategy`,
+        "error",
+        stepId
+      )
+    );
+  }
+
+  if (value.maxAttempts !== undefined && (!Number.isInteger(value.maxAttempts) || value.maxAttempts <= 0)) {
+    state.errors.push(
+      makeIssue(
+        "INVALID_FIELD",
+        "onError.maxAttempts must be a positive integer.",
+        `${path}.maxAttempts`,
+        "error",
+        stepId
+      )
+    );
+  }
+
+  if (value.goto !== undefined && (typeof value.goto !== "string" || value.goto.trim().length === 0)) {
+    state.errors.push(
+      makeIssue(
+        "INVALID_FIELD",
+        "onError.goto must be a non-empty step ID.",
+        `${path}.goto`,
+        "error",
+        stepId
+      )
+    );
+  }
+
+  if (value.retry !== undefined) {
+    if (!isPlainObject(value.retry)) {
+      state.errors.push(
+        makeIssue(
+          "INVALID_FIELD",
+          "onError.retry must be an object when provided.",
+          `${path}.retry`,
+          "error",
+          stepId
+        )
+      );
+    } else if (
+      value.retry.maxAttempts !== undefined &&
+      (!Number.isInteger(value.retry.maxAttempts) || value.retry.maxAttempts <= 0)
+    ) {
+      state.errors.push(
+        makeIssue(
+          "INVALID_FIELD",
+          "onError.retry.maxAttempts must be a positive integer.",
+          `${path}.retry.maxAttempts`,
+          "error",
+          stepId
+        )
+      );
+    }
+  }
+
+  const policy = resolveOnErrorPolicy(value);
+  if (policy.strategy === "goto" && !policy.goto) {
+    state.errors.push(
+      makeIssue(
+        "INVALID_FIELD",
+        "onError.strategy=goto requires onError.goto.",
+        `${path}.goto`,
+        "error",
+        stepId
+      )
+    );
+  }
+}
+
 function validateAssignSetPath(
   setPath: string,
   path: string,
@@ -597,6 +726,33 @@ function validateDeclaredTools(
           `Tool '${toolName}' is referenced by the workflow but not declared in the tools entry.`,
           "steps",
           "error"
+        )
+      );
+    }
+  }
+}
+
+function validateOnErrorGotoTargets(
+  workflow: WorkflowDocument,
+  inventory: StepInventoryItem[],
+  state: MutableIssueState
+): void {
+  const knownStepIds = new Set(inventory.map((item) => item.step.id));
+
+  for (const item of inventory) {
+    if (!item.step.onError) {
+      continue;
+    }
+
+    const policy = resolveOnErrorPolicy(item.step.onError, workflow.defaults);
+    if (policy.strategy === "goto" && policy.goto && !knownStepIds.has(policy.goto)) {
+      state.errors.push(
+        makeIssue(
+          "INVALID_FIELD",
+          `onError.goto target '${policy.goto}' does not exist in this workflow.`,
+          `${item.path}.onError.goto`,
+          "error",
+          item.step.id
         )
       );
     }
