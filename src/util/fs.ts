@@ -1,4 +1,4 @@
-import { access, mkdir, writeFile } from "node:fs/promises";
+import { access, mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, relative, resolve } from "node:path";
 
 export async function ensureDir(path: string): Promise<void> {
@@ -17,6 +17,10 @@ export async function pathExists(path: string): Promise<boolean> {
 export async function writeTextFile(path: string, content: string): Promise<void> {
   await ensureDir(dirname(path));
   await writeFile(path, content, "utf8");
+}
+
+export async function readTextFile(path: string): Promise<string> {
+  return readFile(path, "utf8");
 }
 
 export function relativePath(from: string, to: string): string {

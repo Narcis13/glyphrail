@@ -36,6 +36,8 @@ export interface BaseStep {
   description?: string;
   when?: string;
   timeoutMs?: number;
+  onError?: Record<string, unknown>;
+  meta?: Record<string, unknown>;
 }
 
 export interface AssignStep extends BaseStep {

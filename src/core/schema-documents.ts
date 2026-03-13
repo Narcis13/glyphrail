@@ -134,6 +134,31 @@ export const SCHEMA_CATALOG: SchemaCatalogEntry[] = [
             loopIterations: { type: "integer" },
             checkpoints: { type: "integer" }
           }
+        },
+        policies: {
+          type: "object",
+          properties: {
+            maxRunSteps: { type: "integer" },
+            maxRunDurationMs: { type: "integer" },
+            allowTools: {
+              type: "array",
+              items: { type: "string" }
+            },
+            allowExternalSideEffects: { type: "boolean" }
+          }
+        },
+        input: {},
+        output: {},
+        artifactPaths: {
+          type: "object",
+          properties: {
+            meta: { type: "string" },
+            input: { type: "string" },
+            state: { type: "string" },
+            output: { type: "string" },
+            trace: { type: "string" },
+            checkpointsDir: { type: "string" }
+          }
         }
       }
     }

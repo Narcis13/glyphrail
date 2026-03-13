@@ -1,0 +1,17 @@
+version: "1.0"
+name: fail-demo
+description: Workflow that intentionally fails
+
+state:
+  stage: init
+
+steps:
+  - id: prepare
+    kind: assign
+    set:
+      stage: pre-fail
+
+  - id: stop
+    kind: fail
+    error: DEMO_FAILURE
+    message: Intentional failure for execution tests

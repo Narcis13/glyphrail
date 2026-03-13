@@ -8,7 +8,7 @@ const repoRoot = dirname(dirname(dirname(fileURLToPath(import.meta.url))));
 const cliEntry = join(repoRoot, "src/cli/index.ts");
 const fixturesRoot = join(repoRoot, "test/fixtures/init-project");
 
-test("capabilities emits the Slice 1 JSON contract", () => {
+test("capabilities emits the Slice 3 JSON contract", () => {
   const result = runCli(["capabilities", "--json"], repoRoot);
   const payload = parseJsonOutput(result.stdout);
 
@@ -17,7 +17,10 @@ test("capabilities emits the Slice 1 JSON contract", () => {
   expect(payload.name).toBe("glyphrail");
   expect(payload.commands).toContain("init");
   expect(payload.commands).toContain("workflow create");
-  expect(payload.features.execution).toBe(false);
+  expect(payload.commands).toContain("run");
+  expect(payload.commands).toContain("runs show");
+  expect(payload.features.execution).toBe(true);
+  expect(payload.features.trace).toBe(true);
 });
 
 test("schema emits machine-readable schema documents", () => {

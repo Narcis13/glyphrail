@@ -1,0 +1,26 @@
+version: "1.0"
+name: lint-demo
+description: Workflow with static lint warnings
+
+state:
+  known: null
+
+steps:
+  - id: choose
+    kind: if
+    condition: ${true}
+    then:
+      - id: noop_branch
+        kind: noop
+
+  - id: analyze
+    kind: agent
+    objective: Determine next action
+    input:
+      known: ${state.known}
+    save: state.generated
+
+  - id: done
+    kind: return
+    output:
+      missing: ${state.unknown}

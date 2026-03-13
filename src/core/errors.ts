@@ -49,6 +49,26 @@ export function createFailure(
   );
 }
 
+export function annotateFailure(
+  error: unknown,
+  context: Partial<Pick<GlyphrailError, "stepId" | "runId" | "retryable">> & {
+    code?: string;
+    message?: string;
+    details?: unknown;
+  }
+): GlyphrailFailure {
+  const normalizedError = normalizeError(error);
+
+  return new GlyphrailFailure(
+    {
+      ...normalizedError.glyphrailError,
+      ...context,
+      details: context.details ?? normalizedError.glyphrailError.details
+    },
+    normalizedError.exitCode
+  );
+}
+
 export function normalizeError(error: unknown): GlyphrailFailure {
   if (error instanceof GlyphrailFailure) {
     return error;
@@ -79,6 +99,7 @@ export function exitCodeForErrorCode(code: string): number {
     code === "TOOL_INPUT_VALIDATION_ERROR" ||
     code === "TOOL_RUNTIME_ERROR" ||
     code === "TOOL_OUTPUT_VALIDATION_ERROR" ||
+    code === "OUTPUT_VALIDATION_ERROR" ||
     code === "AGENT_OUTPUT_PARSE_ERROR" ||
     code === "AGENT_OUTPUT_VALIDATION_ERROR" ||
     code === "TIMEOUT" ||
