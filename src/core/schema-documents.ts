@@ -1,5 +1,6 @@
 import { WORKFLOW_STEP_KINDS } from "./ast";
 import { TRACE_EVENT_TYPES } from "./events";
+import { JSON_SCHEMA_SUBSET_DEFINITION, JSON_SCHEMA_SUBSET_DOCUMENT } from "./json-schema";
 import { CURSOR_FRAME_KINDS, RUN_STATUSES, STEP_STATUSES } from "./run-record";
 import { workflowDocumentSchema } from "../dsl/workflow-schema";
 
@@ -16,6 +17,12 @@ export const SCHEMA_CATALOG: SchemaCatalogEntry[] = [
     title: "Workflow DSL",
     description: "Top-level workflow authoring document and step shapes.",
     schema: workflowDocumentSchema
+  },
+  {
+    name: "json-schema-subset",
+    title: "JSON Schema Subset",
+    description: "Minimal JSON Schema subset supported across workflow, tool, and agent contracts.",
+    schema: JSON_SCHEMA_SUBSET_DOCUMENT
   },
   {
     name: "config",
@@ -52,7 +59,8 @@ export const SCHEMA_CATALOG: SchemaCatalogEntry[] = [
             allowExternalSideEffects: { type: "boolean" }
           }
         }
-      }
+      },
+      additionalProperties: false
     }
   },
   {
@@ -66,8 +74,8 @@ export const SCHEMA_CATALOG: SchemaCatalogEntry[] = [
       properties: {
         name: { type: "string" },
         description: { type: "string" },
-        inputSchema: { type: "object" },
-        outputSchema: { type: "object" },
+        inputSchema: { $ref: "#/$defs/jsonSchema" },
+        outputSchema: { $ref: "#/$defs/jsonSchema" },
         sideEffect: {
           enum: ["none", "read", "write", "external"]
         },
@@ -78,6 +86,10 @@ export const SCHEMA_CATALOG: SchemaCatalogEntry[] = [
             enum: ["io", "http", "file", "compute", "ai", "db", "unsafe"]
           }
         }
+      },
+      additionalProperties: false,
+      $defs: {
+        jsonSchema: JSON_SCHEMA_SUBSET_DEFINITION
       }
     }
   },

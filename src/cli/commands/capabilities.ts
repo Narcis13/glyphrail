@@ -1,4 +1,6 @@
 import { DEFAULT_CONFIG } from "../../config/types";
+import { EXIT_CODES } from "../../core/errors";
+import { TRACE_EVENT_TYPES } from "../../core/events";
 import { SCHEMA_CATALOG } from "../../core/schema-documents";
 import { WORKFLOW_STEP_KINDS } from "../../core/ast";
 import { VERSION } from "../../version";
@@ -39,6 +41,39 @@ export const capabilitiesCommand: CommandDefinition = {
         packaging: false
       },
       outputModes: ["pretty", "json", "jsonl"],
+      traceEventTypes: [...TRACE_EVENT_TYPES],
+      exitCodes: EXIT_CODES,
+      agentAdapters: ["mock"],
+      jsonEnvelope: {
+        success: {
+          ok: true
+        },
+        error: {
+          ok: false,
+          error: {
+            code: "string",
+            message: "string",
+            details: "unknown"
+          }
+        }
+      },
+      runArtifacts: {
+        rootPattern: ".glyphrail/runs/run_<id>/",
+        files: [
+          "meta.json",
+          "input.json",
+          "state.latest.json",
+          "output.json",
+          "trace.jsonl",
+          "checkpoints/"
+        ]
+      },
+      toolRegistryEntry: {
+        file: "glyphrail.tools.ts",
+        export: "default",
+        factory: "defineTools",
+        valueType: "Tool[]"
+      },
       schemas: SCHEMA_CATALOG.map((entry) => ({
         name: entry.name,
         title: entry.title
@@ -57,6 +92,8 @@ export const capabilitiesCommand: CommandDefinition = {
         `Workflow step kinds: ${WORKFLOW_STEP_KINDS.join(", ")}`,
         "Execution runtime: assign/tool/agent/if/for_each/while/return/fail/noop",
         "Tool runtime: list/show/call/validate/scaffold",
+        `Trace events: ${TRACE_EVENT_TYPES.join(", ")}`,
+        `Agent adapters: mock`,
         "Slice 6: resume/check/runs-list",
         `Schemas: ${SCHEMA_CATALOG.map((entry) => entry.name).join(", ")}`
       ].join("\n")

@@ -1,4 +1,5 @@
 node_modules
 .glyphrail/
+playground/mvp/.glyphrail/
 coverage
 *.log

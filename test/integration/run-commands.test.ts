@@ -255,6 +255,31 @@ test("run retries a structured agent step and persists retry counters", async ()
   expect(explainPayload.steps.find((step: { stepId: string }) => step.stepId === "analyze").retries).toBe(1);
 });
 
+test("run retries a tool step and persists retry counters", async () => {
+  const projectRoot = await createTempProject();
+  const result = runCli(
+    ["--cwd", projectRoot, "run", "workflows/tool-retry.gr.yaml", "--json"],
+    repoRoot
+  );
+  const payload = parseJson(result.stdout);
+
+  expect(result.exitCode).toBe(0);
+  expect(payload.output).toEqual({
+    greeting: "Hello, Ada!"
+  });
+  expect(payload.counters.retries).toBe(1);
+
+  const showResult = runCli(["--cwd", projectRoot, "runs", "show", payload.runId, "--json"], repoRoot);
+  const showPayload = parseJson(showResult.stdout);
+  const explainResult = runCli(["--cwd", projectRoot, "runs", "explain", payload.runId, "--json"], repoRoot);
+  const explainPayload = parseJson(explainResult.stdout);
+
+  expect(showResult.exitCode).toBe(0);
+  expect(showPayload.meta.retryCounters.flaky_greet).toBe(1);
+  expect(explainPayload.steps.find((step: { stepId: string }) => step.stepId === "flaky_greet").attempts).toBe(2);
+  expect(explainPayload.steps.find((step: { stepId: string }) => step.stepId === "flaky_greet").retries).toBe(1);
+});
+
 test("run applies continue onError strategy for structured agent failures", async () => {
   const projectRoot = await createTempProject();
 

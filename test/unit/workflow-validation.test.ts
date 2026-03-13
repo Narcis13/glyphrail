@@ -15,6 +15,7 @@ test("tool discovery finds inline tool declarations in glyphrail.tools.ts", asyn
 
   expect(preview.toolNames).toEqual([
     "alwaysFails",
+    "failOnceGreeting",
     "formatHandle",
     "interruptOnce",
     "makeGreeting",
@@ -63,6 +64,56 @@ test("validation rejects unsupported agent modes and invalid reduced onError pol
 
   expect(result.errors.map((error) => error.code)).toContain("UNSUPPORTED_AGENT_MODE");
   expect(result.errors.map((error) => error.code)).toContain("INVALID_FIELD");
+});
+
+test("validation rejects unsupported workflow top-level fields and schema keywords", async () => {
+  const result = await validateWorkflowDocument(
+    {
+      version: "1.0",
+      name: "invalid-contracts",
+      extraField: true,
+      inputSchema: {
+        type: "object",
+        patternProperties: {
+          "^x-": {
+            type: "string"
+          }
+        }
+      },
+      defaults: {
+        timeoutMs: 1000,
+        surprise: true
+      },
+      policies: {
+        maxRunSteps: 10,
+        unsupported: true
+      },
+      steps: [
+        {
+          id: "analyze",
+          kind: "agent",
+          objective: "demo",
+          outputSchema: {
+            type: "object",
+            if: {
+              type: "string"
+            }
+          }
+        }
+      ]
+    },
+    {
+      toolsEntryPath: join(fixtureProjectRoot, "glyphrail.tools.ts")
+    }
+  );
+
+  expect(result.errors.map((error) => error.code)).toContain("INVALID_TOP_LEVEL_FIELD");
+  expect(result.errors.map((error) => error.code)).toContain("INVALID_SCHEMA");
+  expect(result.errors.map((error) => error.code)).toContain("INVALID_FIELD");
+  expect(result.errors.some((error) => error.path === "inputSchema.patternProperties")).toBe(true);
+  expect(result.errors.some((error) => error.path === "steps[0].outputSchema.if")).toBe(true);
+  expect(result.errors.some((error) => error.path === "defaults.surprise")).toBe(true);
+  expect(result.errors.some((error) => error.path === "policies.unsupported")).toBe(true);
 });
 
 test("normalization keeps a single JSON-compatible workflow shape", async () => {

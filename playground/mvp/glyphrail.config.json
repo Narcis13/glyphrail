@@ -1,0 +1,13 @@
+{
+  "schemaVersion": "0.1.0",
+  "workflowsDir": "./workflows",
+  "runsDir": "./.glyphrail/runs",
+  "toolsEntry": "./glyphrail.tools.ts",
+  "defaultOutputMode": "pretty",
+  "defaultCheckpointEveryStep": true,
+  "policies": {
+    "maxRunSteps": 100,
+    "maxRunDurationMs": 300000,
+    "allowExternalSideEffects": false
+  }
+}

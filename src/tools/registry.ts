@@ -89,12 +89,12 @@ export async function loadDeclaredTools(entryPath: string): Promise<Tool[]> {
   }
 
   const module = await import(pathToFileURL(entryPath).href);
-  const exportedValue = module.default ?? module.tools ?? module.registry;
+  const exportedValue = module.default;
 
   if (!Array.isArray(exportedValue)) {
     throw createFailure(
-      "GENERIC_FAILURE",
-      `Tools entry must default-export an array of tools: ${entryPath}`,
+      "TOOL_VALIDATION_ERROR",
+      `Tools entry must default-export defineTools([...]) from ${entryPath}.`,
       EXIT_CODES.genericFailure
     );
   }
@@ -294,7 +294,7 @@ async function parseToolModule(
 }
 
 function extractDefineToolIdentifiers(source: string): string[] {
-  const match = source.match(/defineTools\s*\(\s*\[([\s\S]*?)\]\s*\)/m);
+  const match = source.match(/export\s+default\s+defineTools\s*\(\s*\[([\s\S]*?)\]\s*\)/m);
   if (!match) {
     return [];
   }

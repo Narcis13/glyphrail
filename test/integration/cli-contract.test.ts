@@ -34,6 +34,12 @@ test("capabilities emits the Slice 6 JSON contract", () => {
   expect(payload.features.trace).toBe(true);
   expect(payload.features.structuredAgent).toBe(true);
   expect(payload.features.projectCheck).toBe(true);
+  expect(payload.traceEventTypes).toContain("run.paused");
+  expect(payload.exitCodes.paused).toBe(6);
+  expect(payload.agentAdapters).toEqual(["mock"]);
+  expect(payload.runArtifacts.rootPattern).toBe(".glyphrail/runs/run_<id>/");
+  expect(payload.toolRegistryEntry.export).toBe("default");
+  expect(payload.toolRegistryEntry.factory).toBe("defineTools");
 });
 
 test("schema emits machine-readable schema documents", () => {
@@ -43,7 +49,11 @@ test("schema emits machine-readable schema documents", () => {
   expect(result.exitCode).toBe(0);
   expect(payload.ok).toBe(true);
   expect(payload.schemaNames).toContain("workflow");
+  expect(payload.schemaNames).toContain("json-schema-subset");
   expect(payload.schemas.config.properties.workflowsDir.type).toBe("string");
+  expect(payload.schemas.workflow.additionalProperties).toBe(false);
+  expect(payload.schemas.tool.properties.inputSchema.$ref).toBe("#/$defs/jsonSchema");
+  expect(payload.schemas["json-schema-subset"].$defs.jsonSchema.additionalProperties).toBe(false);
   expect(payload.schemas["run-record"].title).toBe("RunRecord");
 });
 

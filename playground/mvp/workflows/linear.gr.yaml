@@ -1,0 +1,25 @@
+version: "1.0"
+name: linear-demo
+description: Linear workflow used for validation tests
+
+state:
+  name: null
+  greeting: null
+
+steps:
+  - id: init
+    kind: assign
+    set:
+      name: ${input.name}
+
+  - id: greet
+    kind: tool
+    tool: makeGreeting
+    input:
+      name: ${state.name}
+    save: state.greeting
+
+  - id: done
+    kind: return
+    output:
+      greeting: ${state.greeting}

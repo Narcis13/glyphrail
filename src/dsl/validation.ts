@@ -8,6 +8,7 @@ import {
   type ExpressionReference
 } from "../core/expression-engine";
 import { isOnErrorStrategy, resolveOnErrorPolicy } from "../core/error-policy";
+import { validateSchemaDefinition } from "../core/schema-validator";
 import { flattenWorkflowSteps, getStepWriteTargets, normalizeStatePath, normalizeWorkflowDocument, type StepInventoryItem } from "./normalization";
 import { discoverDeclaredTools } from "../tools/registry";
 
@@ -58,6 +59,22 @@ const COMMON_STEP_FIELDS = new Set([
   "onError",
   "meta"
 ]);
+
+const TOP_LEVEL_FIELDS = new Set([
+  "version",
+  "name",
+  "description",
+  "inputSchema",
+  "outputSchema",
+  "defaults",
+  "policies",
+  "state",
+  "steps",
+  "output"
+]);
+
+const DEFAULT_FIELDS = new Set(["model", "timeoutMs", "maxStepRetries", "outputMode"]);
+const POLICY_FIELDS = new Set(["allowTools", "maxRunSteps", "maxRunDurationMs", "maxAgentToolCalls"]);
 
 const STEP_FIELD_MAP: Record<string, Set<string>> = {
   assign: new Set([...COMMON_STEP_FIELDS, "set"]),
@@ -258,6 +275,18 @@ export function lintWorkflow(validation: WorkflowValidationResult): WorkflowLint
 }
 
 function validateTopLevel(raw: Record<string, unknown>, state: MutableIssueState): void {
+  const invalidFields = Object.keys(raw).filter((key) => !TOP_LEVEL_FIELDS.has(key));
+  for (const field of invalidFields) {
+    state.errors.push(
+      makeIssue(
+        "INVALID_TOP_LEVEL_FIELD",
+        `Field '${field}' is not allowed at the top level of a workflow document.`,
+        field,
+        "error"
+      )
+    );
+  }
+
   validateRequiredString(raw.version, "version", state);
   validateRequiredString(raw.name, "name", state);
 
@@ -265,10 +294,10 @@ function validateTopLevel(raw: Record<string, unknown>, state: MutableIssueState
     state.errors.push(makeIssue("INVALID_STEPS", "Workflow 'steps' must be an array.", "steps", "error"));
   }
 
-  validateOptionalObject(raw.inputSchema, "inputSchema", state);
-  validateOptionalObject(raw.outputSchema, "outputSchema", state);
-  validateOptionalObject(raw.defaults, "defaults", state);
-  validateOptionalObject(raw.policies, "policies", state);
+  validateOptionalSchemaObject(raw.inputSchema, "inputSchema", state);
+  validateOptionalSchemaObject(raw.outputSchema, "outputSchema", state);
+  validateDefaults(raw.defaults, "defaults", state);
+  validatePolicies(raw.policies, "policies", state);
   validateOptionalObject(raw.state, "state", state);
 }
 
@@ -444,7 +473,7 @@ function validateAgentStep(
   if (isPlainObject(value.input)) {
     collectExpressionsInValue(value.input, `${path}.input`, state);
   }
-  validateOptionalObject(value.outputSchema, `${path}.outputSchema`, state, stepId);
+  validateOptionalSchemaObject(value.outputSchema, `${path}.outputSchema`, state, stepId);
   validateWriteDirectives(value, path, state, stepId);
 }
 
@@ -665,6 +694,107 @@ function validateOnErrorPolicy(
   }
 }
 
+function validateDefaults(
+  value: unknown,
+  path: string,
+  state: MutableIssueState
+): void {
+  if (value === undefined) {
+    return;
+  }
+
+  if (!isPlainObject(value)) {
+    state.errors.push(makeIssue("INVALID_FIELD", `Expected object at ${path}.`, path, "error"));
+    return;
+  }
+
+  for (const field of Object.keys(value)) {
+    if (!DEFAULT_FIELDS.has(field)) {
+      state.errors.push(
+        makeIssue(
+          "INVALID_FIELD",
+          `Unsupported defaults field '${field}'.`,
+          `${path}.${field}`,
+          "error"
+        )
+      );
+    }
+  }
+
+  validateOptionalString(value.model, `${path}.model`, state);
+  validateOptionalNonNegativeInteger(value.timeoutMs, `${path}.timeoutMs`, state);
+  validateOptionalNonNegativeInteger(value.maxStepRetries, `${path}.maxStepRetries`, state);
+
+  if (
+    value.outputMode !== undefined &&
+    value.outputMode !== "structured" &&
+    value.outputMode !== "text" &&
+    value.outputMode !== "json"
+  ) {
+    state.errors.push(
+      makeIssue(
+        "INVALID_FIELD",
+        "defaults.outputMode must be one of structured, text, or json.",
+        `${path}.outputMode`,
+        "error"
+      )
+    );
+  }
+}
+
+function validatePolicies(
+  value: unknown,
+  path: string,
+  state: MutableIssueState
+): void {
+  if (value === undefined) {
+    return;
+  }
+
+  if (!isPlainObject(value)) {
+    state.errors.push(makeIssue("INVALID_FIELD", `Expected object at ${path}.`, path, "error"));
+    return;
+  }
+
+  for (const field of Object.keys(value)) {
+    if (!POLICY_FIELDS.has(field)) {
+      state.errors.push(
+        makeIssue(
+          "INVALID_FIELD",
+          `Unsupported policies field '${field}'.`,
+          `${path}.${field}`,
+          "error"
+        )
+      );
+    }
+  }
+
+  if (value.allowTools !== undefined) {
+    if (!Array.isArray(value.allowTools)) {
+      state.errors.push(
+        makeIssue("INVALID_FIELD", "policies.allowTools must be an array.", `${path}.allowTools`, "error")
+      );
+    } else {
+      for (const [index, entry] of value.allowTools.entries()) {
+        if (typeof entry !== "string" || entry.trim().length === 0) {
+          state.errors.push(
+            makeIssue(
+              "INVALID_FIELD",
+              "policies.allowTools entries must be non-empty strings.",
+              `${path}.allowTools[${index}]`,
+              "error"
+            )
+          );
+        }
+      }
+    }
+  }
+
+  validateOptionalPositiveInteger(value.maxRunSteps, `${path}.maxRunSteps`, state);
+  validateOptionalPositiveInteger(value.maxRunDurationMs, `${path}.maxRunDurationMs`, state);
+  validateOptionalPositiveInteger(value.maxAgentToolCalls, `${path}.maxAgentToolCalls`, state);
+}
+
 function validateAssignSetPath(
   setPath: string,
   path: string,
@@ -849,6 +979,32 @@ function validateOptionalNumber(
   }
 }
 
+function validateOptionalNonNegativeInteger(
+  value: unknown,
+  path: string,
+  state: MutableIssueState,
+  stepId?: string
+): void {
+  if (value !== undefined && (!Number.isInteger(value) || (value as number) < 0)) {
+    state.errors.push(
+      makeIssue("INVALID_FIELD", `Expected a non-negative integer at ${path}.`, path, "error", stepId)
+    );
+  }
+}
+
+function validateOptionalPositiveInteger(
+  value: unknown,
+  path: string,
+  state: MutableIssueState,
+  stepId?: string
+): void {
+  if (value !== undefined && (!Number.isInteger(value) || (value as number) <= 0)) {
+    state.errors.push(
+      makeIssue("INVALID_FIELD", `Expected a positive integer at ${path}.`, path, "error", stepId)
+    );
+  }
+}
+
 function validateOptionalObject(
   value: unknown,
   path: string,
@@ -857,6 +1013,34 @@ function validateOptionalObject(
 ): void {
   if (value !== undefined && !isPlainObject(value)) {
     state.errors.push(makeIssue("INVALID_FIELD", `Expected object at ${path}.`, path, "error", stepId));
+  }
+}
+
+function validateOptionalSchemaObject(
+  value: unknown,
+  path: string,
+  state: MutableIssueState,
+  stepId?: string
+): void {
+  if (value === undefined) {
+    return;
+  }
+
+  if (!isPlainObject(value)) {
+    state.errors.push(makeIssue("INVALID_FIELD", `Expected object at ${path}.`, path, "error", stepId));
+    return;
+  }
+
+  for (const issue of validateSchemaDefinition(value)) {
+    state.errors.push(
+      makeIssue(
+        "INVALID_SCHEMA",
+        issue.message,
+        issue.path === "$" ? path : `${path}${issue.path.slice(1)}`,
+        "error",
+        stepId
+      )
+    );
   }
 }
 

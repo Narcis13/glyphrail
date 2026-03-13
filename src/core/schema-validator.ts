@@ -211,7 +211,7 @@ function collectUnsupportedKeywordIssues(schema: JsonSchema, path: string, issue
   for (const key of Object.keys(schema)) {
     if (!SUPPORTED_SCHEMA_KEYS.has(key)) {
       issues.push({
-        path,
+        path: `${path}.${key}`,
         message: `Unsupported schema keyword '${key}'.`
       });
     }

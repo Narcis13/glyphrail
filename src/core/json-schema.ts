@@ -27,3 +27,82 @@ export interface JsonSchema {
   oneOf?: JsonSchema[];
   anyOf?: JsonSchema[];
 }
+
+export const JSON_SCHEMA_TYPES = [
+  "object",
+  "array",
+  "string",
+  "number",
+  "integer",
+  "boolean",
+  "null"
+] as const;
+
+export const JSON_SCHEMA_SUBSET_DEFINITION: Record<string, unknown> = {
+  title: "GlyphrailJsonSchemaSubset",
+  description: "Minimal JSON Schema subset supported by Glyphrail for workflow, tool, and agent contracts.",
+  type: "object",
+  properties: {
+    $schema: { type: "string" },
+    title: { type: "string" },
+    description: { type: "string" },
+    type: {
+      enum: [...JSON_SCHEMA_TYPES]
+    },
+    properties: {
+      type: "object",
+      additionalProperties: {
+        $ref: "#/$defs/jsonSchema"
+      }
+    },
+    items: {
+      $ref: "#/$defs/jsonSchema"
+    },
+    required: {
+      type: "array",
+      items: {
+        type: "string"
+      }
+    },
+    enum: {
+      type: "array"
+    },
+    const: {},
+    default: {},
+    additionalProperties: {
+      anyOf: [
+        { type: "boolean" },
+        {
+          $ref: "#/$defs/jsonSchema"
+        }
+      ]
+    },
+    minItems: { type: "integer" },
+    maxItems: { type: "integer" },
+    minLength: { type: "integer" },
+    maxLength: { type: "integer" },
+    minimum: { type: "number" },
+    maximum: { type: "number" },
+    oneOf: {
+      type: "array",
+      items: {
+        $ref: "#/$defs/jsonSchema"
+      }
+    },
+    anyOf: {
+      type: "array",
+      items: {
+        $ref: "#/$defs/jsonSchema"
+      }
+    }
+  },
+  additionalProperties: false
+};
+
+export const JSON_SCHEMA_SUBSET_DOCUMENT: Record<string, unknown> = {
+  $schema: "https://json-schema.org/draft/2020-12/schema",
+  $ref: "#/$defs/jsonSchema",
+  $defs: {
+    jsonSchema: JSON_SCHEMA_SUBSET_DEFINITION
+  }
+};

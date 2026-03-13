@@ -24,9 +24,10 @@ test("tool list/show/call expose registered tool contracts and direct execution"
 
   expect(listResult.exitCode).toBe(0);
   expect(listPayload.ok).toBe(true);
-  expect(listPayload.toolCount).toBe(6);
+  expect(listPayload.toolCount).toBe(7);
   expect(listPayload.tools.some((tool: { name: string }) => tool.name === "formatHandle")).toBe(true);
   expect(listPayload.tools.some((tool: { name: string }) => tool.name === "interruptOnce")).toBe(true);
+  expect(listPayload.tools.some((tool: { name: string }) => tool.name === "failOnceGreeting")).toBe(true);
   expect(listPayload.tools.find((tool: { name: string }) => tool.name === "makeGreeting").inputSchema.properties.name.type).toBe("string");
 
   expect(showResult.exitCode).toBe(0);
