@@ -1,5 +1,4 @@
-#!/usr/bin/env bun
-import { runCli } from "../src/cli/index.ts"
+#!/usr/bin/env node
+import { launchGlyphrail } from "./launcher.mjs"
 
-const exitCode = await runCli(Bun.argv.slice(2))
-process.exit(exitCode)
+launchGlyphrail()

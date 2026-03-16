@@ -141,6 +141,25 @@ gr run workflows/agent-success.gr.yaml --json
 - TypeScript source is executed directly through Bun
 - There are currently no runtime dependencies declared in `package.json`
 
+## Install From npm
+
+Glyphrail can be published directly to npm and installed globally:
+
+```bash
+npm install -g glyphrail
+glyphrail --help
+```
+
+The package uses a small Node launcher that delegates to Bun, so the target machine still needs Bun on `PATH`.
+
+Once installed globally, the CLI uses the folder you run it from by default:
+
+```bash
+cd /path/to/your/project
+glyphrail init
+glyphrail check --json
+```
+
 Useful commands from the repo root:
 
 ```bash
@@ -151,7 +170,7 @@ bun run src/cli/index.ts capabilities --json
 
 ## Getting Started In A Fresh Project
 
-If Glyphrail is installed or linked so `glyphrail` or `gr` is on your path:
+If Glyphrail is installed globally or linked so `glyphrail` or `gr` is on your path:
 
 ```bash
 glyphrail init
@@ -242,6 +261,22 @@ export default [
 The registry file no longer needs a runtime import from `glyphrail`, so a globally installed CLI can run an initialized project without adding a local package dependency first.
 
 If you want editor autocomplete and type-checking for custom tool modules that use `import type { Tool } from "glyphrail"`, install `glyphrail` in the project as a dev dependency as well.
+
+## Publishing To npm
+
+From the repository root:
+
+```bash
+npm login
+npm run prepublishOnly
+npm publish
+```
+
+For a scoped package, use a lowercase scope and publish publicly:
+
+```bash
+npm publish --access public
+```
 
 ## Recommended Operator Workflow For An External Agent
 
