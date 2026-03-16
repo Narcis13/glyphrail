@@ -1,4 +1,4 @@
-import { defineTools, type Tool } from "glyphrail";
+import type { Tool } from "glyphrail";
 
 const makeGreeting: Tool<{ name: string }, string> = {
   name: "makeGreeting",
@@ -23,4 +23,6 @@ const makeGreeting: Tool<{ name: string }, string> = {
   }
 };
 
-export default defineTools([makeGreeting]);
+export default [
+  makeGreeting
+];

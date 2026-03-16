@@ -78,55 +78,88 @@ function buildToolsEntrySource(
 ): string {
   if (!source) {
     return [
-      'import { defineTools } from "glyphrail";',
       `import { ${toolIdentifier} } from "${importPath}";`,
       "",
-      "export default defineTools([",
+      "export default [",
       `  ${toolIdentifier}`,
-      "]);"
-    ].join("\n");
+      "];"
+    ].join("\n")
   }
 
-  let nextSource = source;
+  let nextSource = source
   if (!hasToolImport(nextSource, toolIdentifier)) {
-    nextSource = insertImport(nextSource, `import { ${toolIdentifier} } from "${importPath}";`);
+    nextSource = insertImport(nextSource, `import { ${toolIdentifier} } from "${importPath}";`)
   }
 
-  const registryMatch = nextSource.match(/defineTools\s*\(\s*\[([\s\S]*?)\]\s*\)/m);
+  const registryMatch = findRegistryMatch(nextSource)
   if (!registryMatch) {
     throw createFailure(
       "GENERIC_FAILURE",
-      "The configured tools entry does not contain a defineTools([...]) registry.",
+      "The configured tools entry must default-export either a Tool[] array or defineTools([...]).",
       EXIT_CODES.genericFailure
-    );
+    )
   }
 
-  const identifiers = registryMatch[1]
+  const identifiers = registryMatch.identifiers
     .split(",")
     .map((entry) => entry.trim())
-    .filter(Boolean);
+    .filter(Boolean)
 
   if (!identifiers.includes(toolIdentifier)) {
-    identifiers.push(toolIdentifier);
+    identifiers.push(toolIdentifier)
   }
 
-  const registryBlock = `defineTools([\n  ${identifiers.join(",\n  ")}\n])`;
-  return nextSource.replace(/defineTools\s*\(\s*\[[\s\S]*?\]\s*\)/m, registryBlock);
+  const registryBlock =
+    registryMatch.kind === "defineTools"
+      ? `defineTools([\n  ${identifiers.join(",\n  ")}\n])`
+      : `export default [\n  ${identifiers.join(",\n  ")}\n];`
+
+  return nextSource.replace(registryMatch.pattern, registryBlock)
+}
+
+function findRegistryMatch(source: string):
+  | {
+      kind: "defineTools" | "array"
+      identifiers: string
+      pattern: RegExp
+    }
+  | undefined {
+  const defineToolsPattern = /defineTools\s*\(\s*\[([\s\S]*?)\]\s*\)/m
+  const defineToolsMatch = source.match(defineToolsPattern)
+  if (defineToolsMatch) {
+    return {
+      kind: "defineTools",
+      identifiers: defineToolsMatch[1],
+      pattern: defineToolsPattern
+    }
+  }
+
+  const arrayPattern = /export\s+default\s+\[([\s\S]*?)\]\s*;?/m
+  const arrayMatch = source.match(arrayPattern)
+  if (arrayMatch) {
+    return {
+      kind: "array",
+      identifiers: arrayMatch[1],
+      pattern: arrayPattern
+    }
+  }
+
+  return undefined
 }
 
 function insertImport(source: string, importStatement: string): string {
-  const matches = [...source.matchAll(/^import .*;$/gm)];
+  const matches = [...source.matchAll(/^import .*;$/gm)]
   if (matches.length === 0) {
-    return `${importStatement}\n\n${source}`;
+    return `${importStatement}\n\n${source}`
   }
 
-  const lastMatch = matches[matches.length - 1];
-  const insertionIndex = (lastMatch.index ?? 0) + lastMatch[0].length;
-  return `${source.slice(0, insertionIndex)}\n${importStatement}${source.slice(insertionIndex)}`;
+  const lastMatch = matches[matches.length - 1]
+  const insertionIndex = (lastMatch.index ?? 0) + lastMatch[0].length
+  return `${source.slice(0, insertionIndex)}\n${importStatement}${source.slice(insertionIndex)}`
 }
 
 function hasToolImport(source: string, toolIdentifier: string): boolean {
-  return new RegExp(`import\\s+{[^}]*\\b${toolIdentifier}\\b[^}]*}\\s+from\\s+["'][^"']+["']`, "m").test(source);
+  return new RegExp(`import\\s+{[^}]*\\b${toolIdentifier}\\b[^}]*}\\s+from\\s+["'][^"']+["']`, "m").test(source)
 }
 
 function normalizeToolIdentifier(value: string): string {

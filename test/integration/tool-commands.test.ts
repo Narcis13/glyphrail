@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { cp, mkdir, mkdtemp, readFile, symlink } from "node:fs/promises";
+import { cp, mkdtemp, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -108,7 +108,6 @@ async function createTempProject(): Promise<string> {
   const tempDir = await mkdtemp(join(tmpdir(), "glyphrail-tool-"));
   const targetRoot = join(tempDir, "project");
   await cp(fixtureProjectRoot, targetRoot, { recursive: true });
-  await ensureGlyphrailPackageLink(targetRoot);
   return targetRoot;
 }
 
@@ -116,13 +115,7 @@ async function createInitializedProject(): Promise<string> {
   const tempDir = await mkdtemp(join(tmpdir(), "glyphrail-tool-init-"));
   const targetRoot = join(tempDir, "project");
   await cp(initFixtureRoot, targetRoot, { recursive: true });
-  await ensureGlyphrailPackageLink(targetRoot);
   return targetRoot;
-}
-
-async function ensureGlyphrailPackageLink(projectRoot: string): Promise<void> {
-  await mkdir(join(projectRoot, "node_modules"), { recursive: true });
-  await symlink(repoRoot, join(projectRoot, "node_modules/glyphrail"), "dir");
 }
 
 function parseJson(output: string): any {

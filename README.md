@@ -209,7 +209,7 @@ steps:
 The generated tools entry exports a typed local registry:
 
 ```ts
-import { defineTools, type Tool } from "glyphrail";
+import type { Tool } from "glyphrail";
 
 const makeGreeting: Tool<{ name: string }, string> = {
   name: "makeGreeting",
@@ -234,8 +234,14 @@ const makeGreeting: Tool<{ name: string }, string> = {
   }
 };
 
-export default defineTools([makeGreeting]);
+export default [
+  makeGreeting
+];
 ```
+
+The registry file no longer needs a runtime import from `glyphrail`, so a globally installed CLI can run an initialized project without adding a local package dependency first.
+
+If you want editor autocomplete and type-checking for custom tool modules that use `import type { Tool } from "glyphrail"`, install `glyphrail` in the project as a dev dependency as well.
 
 ## Recommended Operator Workflow For An External Agent
 
@@ -477,7 +483,7 @@ Retries are persisted in run metadata so inspection and resume stay consistent.
 
 ## Tool Registry And Tool Execution
 
-The tool registry is a default export from the configured `glyphrail.tools.ts` file.
+The tool registry is a default-exported `Tool[]` array from the configured `glyphrail.tools.ts` file.
 
 Tool contract fields:
 

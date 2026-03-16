@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { cp, mkdir, mkdtemp, readFile, symlink } from "node:fs/promises";
+import { cp, mkdtemp, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -377,8 +377,6 @@ async function createTempProject(): Promise<string> {
   const tempDir = await mkdtemp(join(tmpdir(), "glyphrail-run-"));
   const targetRoot = join(tempDir, "project");
   await cp(fixtureProjectRoot, targetRoot, { recursive: true });
-  await mkdir(join(targetRoot, "node_modules"), { recursive: true });
-  await symlink(repoRoot, join(targetRoot, "node_modules/glyphrail"), "dir");
   return targetRoot;
 }
 

@@ -1,7 +1,9 @@
-import { dirname, resolve } from "node:path";
-import { pathToFileURL } from "node:url";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { dirname, join, resolve } from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
-import { createFailure, EXIT_CODES } from "../core/errors";
+import { createFailure, EXIT_CODES, GlyphrailFailure } from "../core/errors";
 import type { JsonSchema } from "../core/json-schema";
 import { validateSchemaDefinition } from "../core/schema-validator";
 import type { Tool, ToolCategoryTag, ToolSideEffect } from "./contracts";
@@ -50,6 +52,9 @@ const FILE_CANDIDATES = [
   "/index.js",
   "/index.mjs"
 ] as const;
+const GLYPHRAIL_RUNTIME_ENTRY = fileURLToPath(new URL("../index.ts", import.meta.url))
+const GLYPHRAIL_RUNTIME_SPECIFIER = GLYPHRAIL_RUNTIME_ENTRY
+const TOOL_SOURCE_FILE_PATTERN = /\.[cm]?[jt]sx?$/
 
 export async function discoverDeclaredTools(entryPath: string): Promise<ToolRegistryPreview> {
   if (!(await pathExists(entryPath))) {
@@ -85,23 +90,87 @@ export async function loadDeclaredTools(entryPath: string): Promise<Tool[]> {
       "NOT_FOUND",
       `Tools entry was not found: ${entryPath}`,
       EXIT_CODES.notFound
-    );
+    )
   }
 
-  const module = await import(pathToFileURL(entryPath).href);
-  const exportedValue = module.default;
+  try {
+    const module = await importToolsModule(entryPath)
+    return validateLoadedTools(module.default, entryPath)
+  } catch (error) {
+    if (!shouldRetryWithCompatBundle(error)) {
+      throw toToolLoadFailure(error, entryPath)
+    }
+  }
 
+  return await loadDeclaredToolsFromCompatBundle(entryPath)
+}
+
+async function importToolsModule(entryPath: string): Promise<Record<string, unknown>> {
+  return await import(`${pathToFileURL(entryPath).href}?t=${Date.now()}`)
+}
+
+async function loadDeclaredToolsFromCompatBundle(entryPath: string): Promise<Tool[]> {
+  const outdir = await mkdtemp(join(tmpdir(), "glyphrail-tools-"))
+
+  try {
+    let buildResult: Awaited<ReturnType<typeof Bun.build>>
+    try {
+      buildResult = await Bun.build({
+        entrypoints: [entryPath],
+        outdir,
+        target: "bun",
+        format: "esm",
+        packages: "bundle",
+        plugins: [createGlyphrailRuntimeRewritePlugin()]
+      })
+    } catch (error) {
+      throw createFailure(
+        "TOOL_VALIDATION_ERROR",
+        `Failed to bundle tools entry from ${entryPath}.`,
+        EXIT_CODES.genericFailure,
+        toBuildFailureDetails(error)
+      )
+    }
+
+    if (!buildResult.success || buildResult.outputs.length === 0) {
+      throw createFailure(
+        "TOOL_VALIDATION_ERROR",
+        `Failed to load tools entry from ${entryPath}.`,
+        EXIT_CODES.genericFailure,
+        {
+          logs: buildResult.logs.map(toBuildLogDetails)
+        }
+      )
+    }
+
+    const bundlePath = buildResult.outputs[0]?.path
+    if (!bundlePath) {
+      throw createFailure(
+        "TOOL_VALIDATION_ERROR",
+        `Failed to load tools entry from ${entryPath}.`,
+        EXIT_CODES.genericFailure
+      )
+    }
+
+    const module = await importToolsModule(bundlePath)
+    return validateLoadedTools(module.default, entryPath)
+  } finally {
+    await rm(outdir, { recursive: true, force: true })
+  }
+}
+
+function validateLoadedTools(exportedValue: unknown, entryPath: string): Tool[] {
   if (!Array.isArray(exportedValue)) {
     throw createFailure(
       "TOOL_VALIDATION_ERROR",
-      `Tools entry must default-export defineTools([...]) from ${entryPath}.`,
+      `Tools entry must default-export a Tool[] registry from ${entryPath}.`,
       EXIT_CODES.genericFailure
-    );
+    )
   }
 
-  const seenToolNames = new Set<string>();
+  const seenToolNames = new Set<string>()
   for (const [index, tool] of exportedValue.entries()) {
-    validateToolShape(tool, entryPath, index);
+    validateToolShape(tool, entryPath, index)
 
     if (seenToolNames.has(tool.name)) {
       throw createFailure(
@@ -113,13 +182,65 @@ export async function loadDeclaredTools(entryPath: string): Promise<Tool[]> {
           path: "$.name",
           index
         }
-      );
+      )
     }
 
-    seenToolNames.add(tool.name);
+    seenToolNames.add(tool.name)
   }
 
-  return exportedValue as Tool[];
+  return exportedValue as Tool[]
+}
+
+function shouldRetryWithCompatBundle(error: unknown): boolean {
+  return hasGlyphrailResolutionIssue(error)
+}
+
+function hasGlyphrailResolutionIssue(error: unknown): boolean {
+  if (error instanceof Error && error.message.includes("glyphrail")) {
+    return true
+  }
+
+  if (!error || typeof error !== "object") {
+    return false
+  }
+
+  const candidate = error as {
+    specifier?: unknown;
+    referrer?: unknown;
+    errors?: unknown[];
+  }
+
+  if (candidate.specifier === "glyphrail") {
+    return true
+  }
+
+  if (Array.isArray(candidate.errors)) {
+    return candidate.errors.some((entry) => hasGlyphrailResolutionIssue(entry))
+  }
+
+  return false
+}
+
+function toToolLoadFailure(error: unknown, entryPath: string): GlyphrailFailure {
+  if (error instanceof GlyphrailFailure) {
+    return error
+  }
+
+  if (error instanceof Error) {
+    return createFailure(
+      "TOOL_VALIDATION_ERROR",
+      `Failed to evaluate tools entry from ${entryPath}.`,
+      EXIT_CODES.genericFailure,
+      error.message
+    )
+  }
+
+  return createFailure(
+    "TOOL_VALIDATION_ERROR",
+    `Failed to evaluate tools entry from ${entryPath}.`,
+    EXIT_CODES.genericFailure,
+    error
+  )
 }
 
 export function toToolDescriptor(tool: Tool): ToolDescriptor {
@@ -294,13 +415,23 @@ async function parseToolModule(
 }
 
 function extractDefineToolIdentifiers(source: string): string[] {
-  const match = source.match(/export\s+default\s+defineTools\s*\(\s*\[([\s\S]*?)\]\s*\)/m);
-  if (!match) {
-    return [];
+  const registryBody = extractToolRegistryBody(source)
+  if (!registryBody) {
+    return []
   }
 
-  const identifiers = match[1].match(/[A-Za-z_$][A-Za-z0-9_$]*/g) ?? [];
-  return identifiers.filter((identifier) => identifier !== "defineTools");
+  const identifiers = registryBody.match(/[A-Za-z_$][A-Za-z0-9_$]*/g) ?? []
+  return identifiers.filter((identifier) => identifier !== "defineTools")
+}
+
+function extractToolRegistryBody(source: string): string | undefined {
+  const defineToolsMatch = source.match(/export\s+default\s+defineTools\s*\(\s*\[([\s\S]*?)\]\s*\)\s*;?/m)
+  if (defineToolsMatch) {
+    return defineToolsMatch[1]
+  }
+
+  const arrayMatch = source.match(/export\s+default\s+\[([\s\S]*?)\]\s*;?/m)
+  return arrayMatch?.[1]
 }
 
 function extractLocalToolNames(source: string): Map<string, string> {
@@ -407,4 +538,106 @@ function prefixSchemaIssues(prefix: string, issues: ToolContractIssue[]): ToolCo
     path: `${prefix}${issue.path.slice(1)}`,
     message: issue.message
   }));
+}
+
+function createGlyphrailRuntimeRewritePlugin(): BunPlugin {
+  return {
+    name: "glyphrail-runtime-rewrite",
+    target: "bun",
+    setup(build) {
+      build.onLoad({ filter: TOOL_SOURCE_FILE_PATTERN }, async (args) => {
+        const source = await readTextFile(args.path)
+        const rewrittenSource = rewriteGlyphrailImports(source)
+
+        if (rewrittenSource === source) {
+          return
+        }
+
+        return {
+          loader: getBunLoader(args.path),
+          contents: rewrittenSource
+        }
+      })
+    }
+  }
+}
+
+function rewriteGlyphrailImports(source: string): string {
+  return source
+    .replace(
+      /(from\s+)(["'])glyphrail\2/g,
+      `$1"${GLYPHRAIL_RUNTIME_SPECIFIER}"`
+    )
+    .replace(
+      /(import\s*\(\s*)(["'])glyphrail\2(\s*\))/g,
+      `$1"${GLYPHRAIL_RUNTIME_SPECIFIER}"$3`
+    )
+}
+
+function getBunLoader(path: string): Loader {
+  if (path.endsWith(".tsx")) {
+    return "tsx"
+  }
+
+  if (path.endsWith(".ts") || path.endsWith(".mts") || path.endsWith(".cts")) {
+    return "ts"
+  }
+
+  if (path.endsWith(".jsx")) {
+    return "jsx"
+  }
+
+  return "js"
+}
+
+function toBuildLogDetails(log: BuildMessage): {
+  name?: string;
+  message: string;
+  position?: BuildMessage["position"];
+  level?: BuildMessage["level"];
+} {
+  return {
+    name: log.name,
+    message: log.message,
+    position: log.position ?? undefined,
+    level: log.level
+  }
+}
+
+function toBuildFailureDetails(error: unknown): unknown {
+  if (error && typeof error === "object" && Array.isArray((error as { errors?: unknown[] }).errors)) {
+    return {
+      errors: (error as { errors: unknown[] }).errors.map((entry) => {
+        if (
+          entry &&
+          typeof entry === "object" &&
+          "message" in entry &&
+          typeof (entry as { message: unknown }).message === "string"
+        ) {
+          const buildEntry = entry as Partial<BuildMessage> & {
+            specifier?: string;
+            referrer?: string;
+            code?: string;
+          };
+          return {
+            name: buildEntry.name,
+            message: buildEntry.message,
+            position: buildEntry.position ?? undefined,
+            level: buildEntry.level,
+            specifier: buildEntry.specifier,
+            referrer: buildEntry.referrer,
+            code: buildEntry.code
+          }
+        }
+
+        return entry
+      })
+    }
+  }
+
+  if (error instanceof Error) {
+    return error.message
+  }
+
+  return error
 }

@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { mkdir, mkdtemp, readFile, stat, symlink } from "node:fs/promises";
+import { mkdtemp, readFile, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -39,7 +39,8 @@ test("capabilities emits the Slice 6 JSON contract", () => {
   expect(payload.agentAdapters).toEqual(["mock"]);
   expect(payload.runArtifacts.rootPattern).toBe(".glyphrail/runs/run_<id>/");
   expect(payload.toolRegistryEntry.export).toBe("default");
-  expect(payload.toolRegistryEntry.factory).toBe("defineTools");
+  expect(payload.toolRegistryEntry.shape).toBe("Tool[]");
+  expect(payload.toolRegistryEntry.helper).toBe("defineTools (optional)");
 });
 
 test("schema emits machine-readable schema documents", () => {
@@ -106,9 +107,6 @@ test("check validates a clean initialized project", async () => {
   const initResult = runCli(["--cwd", tempDir, "init", "--json"], repoRoot);
   expect(initResult.exitCode).toBe(0);
 
-  await mkdir(join(tempDir, "node_modules"), { recursive: true });
-  await symlink(repoRoot, join(tempDir, "node_modules/glyphrail"), "dir");
-
   const result = runCli(["--cwd", tempDir, "check", "--json"], repoRoot);
   const payload = parseJsonOutput(result.stdout);
 
@@ -118,6 +116,26 @@ test("check validates a clean initialized project", async () => {
   expect(payload.workflows.errorCount).toBe(0);
   expect(payload.tools.issues).toEqual([]);
   expect(payload.tools.toolCount).toBeGreaterThan(0);
+});
+
+test("run executes the initialized hello workflow without a local glyphrail package link", async () => {
+  const tempDir = await mkdtemp(join(tmpdir(), "glyphrail-run-init-"));
+  const initResult = runCli(["--cwd", tempDir, "init", "--json"], repoRoot);
+  expect(initResult.exitCode).toBe(0);
+
+  const result = runCli(
+    ["--cwd", tempDir, "run", "workflows/hello.gr.yaml", "--input-json", '{"name":"Ada"}', "--json"],
+    repoRoot
+  );
+  const payload = parseJsonOutput(result.stdout);
+
+  expect(result.exitCode).toBe(0);
+  expect(payload.ok).toBe(true);
+  expect(payload.command).toBe("run");
+  expect(payload.status).toBe("completed");
+  expect(payload.output).toEqual({
+    greeting: "Hello, Ada!"
+  });
 });
 
 function runCli(args: string[], cwd: string) {

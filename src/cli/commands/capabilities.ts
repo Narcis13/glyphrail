@@ -38,7 +38,7 @@ export const capabilitiesCommand: CommandDefinition = {
         toolDirectCall: commandSet.has("tool call"),
         structuredAgent: commandSet.has("runs explain"),
         projectCheck: commandSet.has("check"),
-        packaging: false
+        packaging: true
       },
       outputModes: ["pretty", "json", "jsonl"],
       traceEventTypes: [...TRACE_EVENT_TYPES],
@@ -71,7 +71,8 @@ export const capabilitiesCommand: CommandDefinition = {
       toolRegistryEntry: {
         file: "glyphrail.tools.ts",
         export: "default",
-        factory: "defineTools",
+        shape: "Tool[]",
+        helper: "defineTools (optional)",
         valueType: "Tool[]"
       },
       schemas: SCHEMA_CATALOG.map((entry) => ({

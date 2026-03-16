@@ -2,7 +2,16 @@
   "name": "glyphrail",
   "version": "0.1.0",
   "description": "CLI-first workflow orchestration for deterministic, AI-native runs",
+  "license": "MIT",
   "type": "module",
+  "files": [
+    "bin",
+    "src",
+    "templates",
+    "README.md",
+    "LICENSE",
+    "bunfig.toml"
+  ],
   "exports": {
     ".": "./src/index.ts",
     "./cli": "./src/cli/index.ts"
