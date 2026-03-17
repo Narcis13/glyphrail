@@ -1,0 +1,37 @@
+version: "1.0"
+name: file-edit-demo
+description: Edit a disposable runtime file and read it back
+
+state:
+  editResult: null
+  readResult: null
+
+steps:
+  - id: seed_file
+    kind: tool
+    tool: fileWrite
+    input:
+      path: .glyphrail/runtime/file-edit/output.txt
+      content: Hello, old world!
+
+  - id: update_file
+    kind: tool
+    tool: fileEdit
+    input:
+      path: .glyphrail/runtime/file-edit/output.txt
+      oldText: old
+      newText: new
+    save: state.editResult
+
+  - id: read_back
+    kind: tool
+    tool: fileRead
+    input:
+      path: .glyphrail/runtime/file-edit/output.txt
+    save: state.readResult
+
+  - id: done
+    kind: return
+    output:
+      replacements: ${state.editResult.replacements}
+      content: ${state.readResult.content}

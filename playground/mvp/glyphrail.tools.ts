@@ -1,7 +1,7 @@
 import { access, mkdir, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 
-import { defineTools, type Tool } from "glyphrail";
+import { bash, defineTools, fetch, fileEdit, fileRead, fileWrite, type Tool } from "glyphrail";
 import { formatHandle } from "./tools/format-handle";
 
 const makeGreeting: Tool<{ name: string }, string> = {
@@ -182,6 +182,11 @@ const interruptOnce: Tool<Record<string, never>, { resumed: boolean }> = {
 export default defineTools([
   makeGreeting,
   selectVendor,
+  fileRead,
+  fileWrite,
+  fileEdit,
+  bash,
+  fetch,
   formatHandle,
   alwaysFails,
   failOnceGreeting,

@@ -33,6 +33,7 @@ interface ParsedModule {
   localToolNames: Map<string, string>;
   exportedToolNames: Map<string, string>;
   imports: Map<string, ToolImport>;
+  reExports: Map<string, ToolImport>;
   defineToolIdentifiers: string[];
 }
 
@@ -378,11 +379,41 @@ async function resolveToolIdentifier(
     return undefined;
   }
 
-  const importedModule = await parseToolModule(importedModulePath, moduleCache);
-  return (
-    importedModule.exportedToolNames.get(imported.importedName) ??
-    importedModule.localToolNames.get(imported.importedName) ??
-    (imported.importedName === "default" ? identifier : undefined)
+  return await resolveExportedToolIdentifier(
+    importedModulePath,
+    imported.importedName,
+    identifier,
+    moduleCache
+  );
+}
+
+async function resolveExportedToolIdentifier(
+  modulePath: string,
+  identifier: string,
+  fallbackIdentifier: string,
+  moduleCache: Map<string, ParsedModule>
+): Promise<string | undefined> {
+  const parsedModule = await parseToolModule(modulePath, moduleCache);
+  const localToolName = parsedModule.exportedToolNames.get(identifier) ?? parsedModule.localToolNames.get(identifier);
+  if (localToolName) {
+    return localToolName;
+  }
+
+  const reExport = parsedModule.reExports.get(identifier);
+  if (!reExport) {
+    return identifier === "default" ? fallbackIdentifier : undefined;
+  }
+
+  const reExportedModulePath = await resolveImportPath(dirname(modulePath), reExport.source);
+  if (!reExportedModulePath) {
+    return undefined;
+  }
+
+  return await resolveExportedToolIdentifier(
+    reExportedModulePath,
+    reExport.importedName,
+    fallbackIdentifier,
+    moduleCache
   );
 }
 
@@ -401,6 +432,7 @@ async function parseToolModule(
     localToolNames,
     exportedToolNames: extractExportedToolNames(source, localToolNames),
     imports: extractImports(source),
+    reExports: extractReExports(source),
     defineToolIdentifiers: extractDefineToolIdentifiers(source)
   };
 
@@ -436,7 +468,7 @@ function extractToolRegistryBody(source: string): string | undefined {
 
 function extractLocalToolNames(source: string): Map<string, string> {
   const toolNames = new Map<string, string>();
-  const declarationRegex = /(?:export\s+)?const\s+([A-Za-z_$][A-Za-z0-9_$]*)[\s\S]*?=\s*{([\s\S]*?)}\s*;/g;
+  const declarationRegex = /(?:export\s+)?const\s+([A-Za-z_$][A-Za-z0-9_$]*)(?:\s*:\s*[^=]+)?\s*=\s*{([\s\S]*?)}\s*;/g;
 
   for (const match of source.matchAll(declarationRegex)) {
     const identifier = match[1];
@@ -500,7 +532,30 @@ function extractImports(source: string): Map<string, ToolImport> {
   return imports;
 }
 
+function extractReExports(source: string): Map<string, ToolImport> {
+  const reExports = new Map<string, ToolImport>();
+
+  for (const match of source.matchAll(/export\s+{([^}]+)}\s+from\s+["']([^"']+)["']/g)) {
+    const [, exportBlock, exportSource] = match;
+    for (const entry of exportBlock.split(",")) {
+      const [localName, exportedName] = entry.split(/\s+as\s+/).map((part) => part.trim());
+      if (localName) {
+        reExports.set(exportedName ?? localName, {
+          source: exportSource,
+          importedName: localName
+        });
+      }
+    }
+  }
+
+  return reExports;
+}
+
 async function resolveImportPath(baseDir: string, importPath: string): Promise<string | undefined> {
+  if (importPath === "glyphrail") {
+    return GLYPHRAIL_RUNTIME_ENTRY;
+  }
+
   if (!importPath.startsWith(".")) {
     return undefined;
   }

@@ -8,6 +8,6 @@
   "policies": {
     "maxRunSteps": 100,
     "maxRunDurationMs": 300000,
-    "allowExternalSideEffects": false
+    "allowExternalSideEffects": true
   }
 }

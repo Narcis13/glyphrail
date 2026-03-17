@@ -1,8 +1,10 @@
 import { expect, test } from "bun:test";
-import { cp, mkdtemp, readFile } from "node:fs/promises";
+import { cp, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+
+import { startHttpFixtureServer } from "../support/http-fixture";
 
 const repoRoot = dirname(dirname(dirname(fileURLToPath(import.meta.url))));
 const cliEntry = join(repoRoot, "src/cli/index.ts");
@@ -124,6 +126,125 @@ test("run executes a workflow backed by an imported scaffold-style tool", async 
   expect(payload.output).toEqual({
     handle: "ada-lovelace"
   });
+});
+
+test("run executes the new file, shell, and fetch workflows", async () => {
+  const projectRoot = await createTempProject({
+    allowExternalSideEffects: true
+  });
+  const server = await startHttpFixtureServer();
+
+  try {
+    const fileReadResult = runCli(
+      ["--cwd", projectRoot, "run", "workflows/file-read.gr.yaml", "--json"],
+      repoRoot
+    );
+    const fileReadPayload = parseJson(fileReadResult.stdout);
+    expect(fileReadResult.exitCode).toBe(0);
+    expect(fileReadPayload.output).toEqual({
+      content: "glyphrail-file-read\n",
+      sizeBytes: 20
+    });
+
+    const fileWriteResult = runCli(
+      ["--cwd", projectRoot, "run", "workflows/file-write.gr.yaml", "--json"],
+      repoRoot
+    );
+    const fileWritePayload = parseJson(fileWriteResult.stdout);
+    expect(fileWriteResult.exitCode).toBe(0);
+    expect(fileWritePayload.output).toEqual({
+      path: ".glyphrail/runtime/file-write/output.txt",
+      bytesWritten: 18
+    });
+
+    const fileEditResult = runCli(
+      ["--cwd", projectRoot, "run", "workflows/file-edit.gr.yaml", "--json"],
+      repoRoot
+    );
+    const fileEditPayload = parseJson(fileEditResult.stdout);
+    expect(fileEditResult.exitCode).toBe(0);
+    expect(fileEditPayload.output).toEqual({
+      replacements: 1,
+      content: "Hello, new world!"
+    });
+
+    const bashResult = runCli(
+      ["--cwd", projectRoot, "run", "workflows/bash.gr.yaml", "--json"],
+      repoRoot
+    );
+    const bashPayload = parseJson(bashResult.stdout);
+    expect(bashResult.exitCode).toBe(0);
+    expect(bashPayload.output).toEqual({
+      exitCode: 0,
+      stdout: "glyphrail-bash"
+    });
+
+    const fetchResult = runCli(
+      [
+        "--cwd",
+        projectRoot,
+        "run",
+        "workflows/fetch.gr.yaml",
+        "--input-json",
+        JSON.stringify({
+          url: `${server.baseUrl}/json`
+        }),
+        "--json"
+      ],
+      repoRoot
+    );
+    const fetchPayload = parseJson(fetchResult.stdout);
+    expect(fetchResult.exitCode).toBe(0);
+    expect(fetchPayload.output).toEqual({
+      status: 200,
+      ok: true,
+      method: "POST",
+      querySource: "workflow",
+      echoedGreeting: "hello"
+    });
+  } finally {
+    await server.stop();
+  }
+});
+
+test("run surfaces policy and fetch parsing failures for new built-in tools", async () => {
+  const blockedProjectRoot = await createTempProject();
+  const blockedResult = runCli(
+    ["--cwd", blockedProjectRoot, "run", "workflows/bash.gr.yaml", "--json"],
+    repoRoot
+  );
+  const blockedPayload = parseJson(blockedResult.stdout);
+
+  expect(blockedResult.exitCode).toBe(8);
+  expect(blockedPayload.error.code).toBe("POLICY_VIOLATION");
+
+  const projectRoot = await createTempProject({
+    allowExternalSideEffects: true
+  });
+  const server = await startHttpFixtureServer();
+
+  try {
+    const invalidJsonResult = runCli(
+      [
+        "--cwd",
+        projectRoot,
+        "run",
+        "workflows/fetch.gr.yaml",
+        "--input-json",
+        JSON.stringify({
+          url: `${server.baseUrl}/invalid-json`
+        }),
+        "--json"
+      ],
+      repoRoot
+    );
+    const invalidJsonPayload = parseJson(invalidJsonResult.stdout);
+
+    expect(invalidJsonResult.exitCode).toBe(5);
+    expect(invalidJsonPayload.error.code).toBe("TOOL_RUNTIME_ERROR");
+  } finally {
+    await server.stop();
+  }
 });
 
 test("run records failure artifacts for while max-iterations exhaustion", async () => {
@@ -373,10 +494,20 @@ function runCli(args: string[], cwd: string) {
   };
 }
 
-async function createTempProject(): Promise<string> {
+async function createTempProject(options: {
+  allowExternalSideEffects?: boolean;
+} = {}): Promise<string> {
   const tempDir = await mkdtemp(join(tmpdir(), "glyphrail-run-"));
   const targetRoot = join(tempDir, "project");
   await cp(fixtureProjectRoot, targetRoot, { recursive: true });
+
+  if (options.allowExternalSideEffects !== undefined) {
+    const configPath = join(targetRoot, "glyphrail.config.json");
+    const config = JSON.parse(await readFile(configPath, "utf8"));
+    config.policies.allowExternalSideEffects = options.allowExternalSideEffects;
+    await writeFile(configPath, `${JSON.stringify(config, null, 2)}\n`, "utf8");
+  }
+
   return targetRoot;
 }
 

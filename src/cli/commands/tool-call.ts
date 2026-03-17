@@ -49,6 +49,7 @@ export const toolCallCommand: CommandDefinition = {
       tool: loaded.tool,
       input: input as JsonValue,
       cwd: context.cwd,
+      projectRoot: loaded.project.projectRoot,
       env: process.env,
       allowExternalSideEffects: loaded.project.config.policies.allowExternalSideEffects,
       timeoutMs

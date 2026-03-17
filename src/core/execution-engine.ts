@@ -584,6 +584,7 @@ async function executeToolStep(
       tool,
       input: resolvedInput as JsonValue,
       cwd: state.project.cwd,
+      projectRoot: state.project.projectRoot,
       env: process.env,
       runId: state.runId,
       stepId: step.id,

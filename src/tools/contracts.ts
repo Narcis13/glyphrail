@@ -12,6 +12,7 @@ export interface ToolMeta {
 
 export interface ToolContext {
   cwd: string;
+  projectRoot?: string;
   env: Record<string, string | undefined>;
   runId?: string;
   stepId?: string;

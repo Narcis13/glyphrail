@@ -278,6 +278,22 @@ For a scoped package, use a lowercase scope and publish publicly:
 npm publish --access public
 ```
 
+For the common release path, use the helper scripts instead:
+
+```bash
+npm run release:patch
+npm run release:minor
+npm run release:major
+```
+
+The release helper expects a clean git worktree and valid npm auth. It runs `npm run prepublishOnly`, bumps `package.json`, syncs `src/version.ts`, creates a `release: vX.Y.Z` commit and `vX.Y.Z` tag, publishes to npm, and pushes the current branch plus tags.
+
+If you need a prerelease bump, use:
+
+```bash
+npm run release -- prerelease
+```
+
 ## Recommended Operator Workflow For An External Agent
 
 If you are building another AI system on top of Glyphrail, this is the CLI sequence that matches the current codebase best.

@@ -49,6 +49,27 @@ export function createFailure(
   );
 }
 
+export function isGlyphrailFailureLike(error: unknown): error is {
+  glyphrailError: GlyphrailError;
+  exitCode: number;
+} {
+  if (!error || typeof error !== "object") {
+    return false;
+  }
+
+  const candidate = error as {
+    glyphrailError?: unknown;
+    exitCode?: unknown;
+  };
+
+  if (typeof candidate.exitCode !== "number" || !candidate.glyphrailError || typeof candidate.glyphrailError !== "object") {
+    return false;
+  }
+
+  const glyphrailError = candidate.glyphrailError as Partial<GlyphrailError>;
+  return typeof glyphrailError.code === "string" && typeof glyphrailError.message === "string";
+}
+
 export function annotateFailure(
   error: unknown,
   context: Partial<Pick<GlyphrailError, "stepId" | "runId" | "retryable">> & {
@@ -72,6 +93,15 @@ export function annotateFailure(
 export function normalizeError(error: unknown): GlyphrailFailure {
   if (error instanceof GlyphrailFailure) {
     return error;
+  }
+
+  if (isGlyphrailFailureLike(error)) {
+    return new GlyphrailFailure(
+      {
+        ...error.glyphrailError
+      },
+      error.exitCode
+    );
   }
 
   if (error instanceof Error) {

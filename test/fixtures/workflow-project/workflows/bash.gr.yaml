@@ -1,0 +1,20 @@
+version: "1.0"
+name: bash-demo
+description: Execute a deterministic shell command
+
+state:
+  bashResult: null
+
+steps:
+  - id: run_shell
+    kind: tool
+    tool: bash
+    input:
+      command: printf 'glyphrail-bash'
+    save: state.bashResult
+
+  - id: done
+    kind: return
+    output:
+      exitCode: ${state.bashResult.exitCode}
+      stdout: ${state.bashResult.stdout}

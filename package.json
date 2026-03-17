@@ -38,6 +38,10 @@
   },
   "scripts": {
     "dev": "bun run src/cli/index.ts",
+    "release": "node scripts/release.mjs",
+    "release:patch": "node scripts/release.mjs patch",
+    "release:minor": "node scripts/release.mjs minor",
+    "release:major": "node scripts/release.mjs major",
     "test": "bun test",
     "check:package": "npm pack --dry-run",
     "prepublishOnly": "bun test && npm run check:package"

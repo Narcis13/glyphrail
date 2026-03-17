@@ -15,7 +15,12 @@ test("tool discovery finds inline tool declarations in glyphrail.tools.ts", asyn
 
   expect(preview.toolNames).toEqual([
     "alwaysFails",
+    "bash",
     "failOnceGreeting",
+    "fetch",
+    "fileEdit",
+    "fileRead",
+    "fileWrite",
     "formatHandle",
     "interruptOnce",
     "makeGreeting",

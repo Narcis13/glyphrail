@@ -1,4 +1,11 @@
-import { GlyphrailFailure, annotateFailure, createFailure, exitCodeForErrorCode } from "../core/errors";
+import {
+  GlyphrailFailure,
+  annotateFailure,
+  createFailure,
+  exitCodeForErrorCode,
+  isGlyphrailFailureLike,
+  normalizeError
+} from "../core/errors";
 import type { JsonValue } from "../core/json-schema";
 import { assertJsonSchema } from "../core/schema-validator";
 import type { Tool, ToolMeta } from "./contracts";
@@ -13,6 +20,7 @@ export interface InvokeToolOptions extends ToolInvocationPolicy {
   tool: Tool;
   input: JsonValue;
   cwd: string;
+  projectRoot?: string;
   env: Record<string, string | undefined>;
   runId?: string;
   stepId?: string;
@@ -76,6 +84,7 @@ export async function invokeTool(options: InvokeToolOptions): Promise<InvokeTool
       () =>
         options.tool.execute(options.input as never, {
           cwd: options.cwd,
+          projectRoot: options.projectRoot,
           env: options.env,
           runId: options.runId,
           stepId: options.stepId,
@@ -87,8 +96,8 @@ export async function invokeTool(options: InvokeToolOptions): Promise<InvokeTool
     );
   } catch (error) {
     throw annotateFailure(
-      error instanceof GlyphrailFailure
-        ? error
+      error instanceof GlyphrailFailure || isGlyphrailFailureLike(error)
+        ? normalizeError(error)
         : createFailure(
             "TOOL_RUNTIME_ERROR",
             `Tool '${options.tool.name}' execution failed.`,

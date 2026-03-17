@@ -1,0 +1,20 @@
+version: "1.0"
+name: file-read-demo
+description: Read a fixture file from the project workspace
+
+state:
+  readResult: null
+
+steps:
+  - id: read_fixture
+    kind: tool
+    tool: fileRead
+    input:
+      path: inputs/file-read.txt
+    save: state.readResult
+
+  - id: done
+    kind: return
+    output:
+      content: ${state.readResult.content}
+      sizeBytes: ${state.readResult.sizeBytes}
