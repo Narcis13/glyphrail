@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { mkdtemp, readFile, stat } from "node:fs/promises";
+import { mkdtemp, readFile, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -115,7 +115,15 @@ test("check validates a clean initialized project", async () => {
   expect(payload.command).toBe("check");
   expect(payload.workflows.errorCount).toBe(0);
   expect(payload.tools.issues).toEqual([]);
-  expect(payload.tools.toolCount).toBeGreaterThan(0);
+  expect(payload.tools.toolCount).toBe(6);
+  expect(payload.tools.declaredNames).toEqual([
+    "bash",
+    "fetch",
+    "fileEdit",
+    "fileRead",
+    "fileWrite",
+    "makeGreeting"
+  ]);
 });
 
 test("run executes the initialized hello workflow without a local glyphrail package link", async () => {
@@ -135,6 +143,37 @@ test("run executes the initialized hello workflow without a local glyphrail pack
   expect(payload.status).toBe("completed");
   expect(payload.output).toEqual({
     greeting: "Hello, Ada!"
+  });
+});
+
+test("init makes native glyphrail tools callable without a local package link", async () => {
+  const tempDir = await mkdtemp(join(tmpdir(), "glyphrail-init-tools-"));
+  const initResult = runCli(["--cwd", tempDir, "init", "--json"], repoRoot);
+  expect(initResult.exitCode).toBe(0);
+  await writeFile(join(tempDir, "demo.txt"), "hello", "utf8");
+
+  const readResult = runCli(
+    [
+      "--cwd",
+      tempDir,
+      "tool",
+      "call",
+      "fileRead",
+      "--input-json",
+      '{"path":"demo.txt"}',
+      "--json"
+    ],
+    repoRoot
+  );
+  const readPayload = parseJsonOutput(readResult.stdout);
+
+  expect(readResult.exitCode).toBe(0);
+  expect(readPayload.ok).toBe(true);
+  expect(readPayload.output).toEqual({
+    path: "demo.txt",
+    content: "hello",
+    encoding: "utf8",
+    sizeBytes: 5
   });
 });
 

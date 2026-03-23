@@ -1,4 +1,4 @@
-import type { Tool } from "glyphrail";
+import { bash, defineTools, fetch, fileEdit, fileRead, fileWrite, type Tool } from "glyphrail";
 
 const makeGreeting: Tool<{ name: string }, string> = {
   name: "makeGreeting",
@@ -23,6 +23,11 @@ const makeGreeting: Tool<{ name: string }, string> = {
   }
 };
 
-export default [
-  makeGreeting
-];
+export default defineTools([
+  makeGreeting,
+  fileRead,
+  fileWrite,
+  fileEdit,
+  bash,
+  fetch
+]);

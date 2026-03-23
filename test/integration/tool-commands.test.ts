@@ -265,6 +265,55 @@ test("tool scaffold creates a module file and registers it in glyphrail.tools.ts
   expect(listPayload.tools.some((tool: { name: string }) => tool.name === "formatHandle")).toBe(true);
 });
 
+test("tool scaffold bootstraps native glyphrail tools when no entry exists yet", async () => {
+  const projectRoot = await mkdtemp(join(tmpdir(), "glyphrail-tool-bootstrap-"));
+  const scaffoldResult = runCli(
+    ["--cwd", projectRoot, "tool", "scaffold", "format-handle", "--json"],
+    repoRoot
+  );
+  const scaffoldPayload = parseJson(scaffoldResult.stdout);
+  const entrySource = await readFile(join(projectRoot, "glyphrail.tools.ts"), "utf8");
+  const listResult = runCli(["--cwd", projectRoot, "tool", "list", "--json"], repoRoot);
+  const listPayload = parseJson(listResult.stdout);
+
+  expect(scaffoldResult.exitCode).toBe(0);
+  expect(scaffoldPayload.created).toContain("tools/format-handle.ts");
+  expect(scaffoldPayload.created).toContain("glyphrail.tools.ts");
+  expect(entrySource).toContain(
+    'import { bash, defineTools, fetch, fileEdit, fileRead, fileWrite } from "glyphrail";'
+  );
+  expect(entrySource).toContain("export default defineTools([");
+  expect(entrySource).toContain("fileRead");
+  expect(entrySource).toContain("fileWrite");
+  expect(entrySource).toContain("fileEdit");
+  expect(entrySource).toContain("bash");
+  expect(entrySource).toContain("fetch");
+
+  expect(listResult.exitCode).toBe(0);
+  expect(listPayload.toolCount).toBe(6);
+  expect(listPayload.tools.some((tool: { name: string }) => tool.name === "formatHandle")).toBe(true);
+  expect(listPayload.tools.some((tool: { name: string }) => tool.name === "fileRead")).toBe(true);
+  expect(listPayload.tools.some((tool: { name: string }) => tool.name === "fileWrite")).toBe(true);
+  expect(listPayload.tools.some((tool: { name: string }) => tool.name === "fileEdit")).toBe(true);
+  expect(listPayload.tools.some((tool: { name: string }) => tool.name === "bash")).toBe(true);
+  expect(listPayload.tools.some((tool: { name: string }) => tool.name === "fetch")).toBe(true);
+});
+
+test("tool scaffold rejects names reserved by built-in glyphrail tools", async () => {
+  const projectRoot = await createInitializedProject();
+  const scaffoldResult = runCli(
+    ["--cwd", projectRoot, "tool", "scaffold", "file-read", "--json"],
+    repoRoot
+  );
+  const scaffoldPayload = parseJson(scaffoldResult.stdout);
+
+  expect(scaffoldResult.exitCode).toBe(2);
+  expect(scaffoldPayload.ok).toBe(false);
+  expect(scaffoldPayload.error.code).toBe("CLI_USAGE_ERROR");
+  expect(scaffoldPayload.error.message).toContain("reserved");
+  expect(scaffoldPayload.error.message).toContain("fileRead");
+});
+
 function runCli(args: string[], cwd: string) {
   const processResult = Bun.spawnSync(["bun", cliEntry, ...args], {
     cwd,

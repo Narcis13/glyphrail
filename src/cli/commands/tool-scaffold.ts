@@ -6,6 +6,9 @@ import { ensureDir, pathExists, readTextFile, relativePath, writeTextFile } from
 import { loadTemplate, renderTemplate } from "../../util/templates";
 import type { CommandDefinition } from "../types";
 
+const NATIVE_TOOL_IDENTIFIERS = ["fileRead", "fileWrite", "fileEdit", "bash", "fetch"] as const
+const RESERVED_TOOL_IDENTIFIERS = new Set<string>(["defineTools", ...NATIVE_TOOL_IDENTIFIERS])
+
 export const toolScaffoldCommand: CommandDefinition = {
   path: ["tool", "scaffold"],
   summary: "Create a new local tool module and register it.",
@@ -30,6 +33,7 @@ export const toolScaffoldCommand: CommandDefinition = {
 
     const force = Boolean(args.flags.force);
     const toolIdentifier = normalizeToolIdentifier(args.positionals[0] as string);
+    assertToolIdentifierIsAvailable(toolIdentifier)
     const toolFileBase = toKebabCase(toolIdentifier);
     const project = await context.getProjectConfig();
     const toolModulePath = resolve(project.projectRoot, "tools", `${toolFileBase}.ts`);
@@ -78,11 +82,17 @@ function buildToolsEntrySource(
 ): string {
   if (!source) {
     return [
+      'import { bash, defineTools, fetch, fileEdit, fileRead, fileWrite } from "glyphrail";',
       `import { ${toolIdentifier} } from "${importPath}";`,
       "",
-      "export default [",
-      `  ${toolIdentifier}`,
-      "];"
+      "export default defineTools([",
+      `  ${toolIdentifier},`,
+      "  fileRead,",
+      "  fileWrite,",
+      "  fileEdit,",
+      "  bash,",
+      "  fetch",
+      "]);"
     ].join("\n")
   }
 
@@ -160,6 +170,18 @@ function insertImport(source: string, importStatement: string): string {
 
 function hasToolImport(source: string, toolIdentifier: string): boolean {
   return new RegExp(`import\\s+{[^}]*\\b${toolIdentifier}\\b[^}]*}\\s+from\\s+["'][^"']+["']`, "m").test(source)
+}
+
+function assertToolIdentifierIsAvailable(toolIdentifier: string): void {
+  if (!RESERVED_TOOL_IDENTIFIERS.has(toolIdentifier)) {
+    return
+  }
+
+  throw createFailure(
+    "CLI_USAGE_ERROR",
+    `Tool name '${toolIdentifier}' is reserved by Glyphrail built-in tooling.`,
+    EXIT_CODES.invalidCliUsage
+  )
 }
 
 function normalizeToolIdentifier(value: string): string {
