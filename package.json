@@ -1,6 +1,6 @@
 {
   "name": "glyphrail",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "CLI-first workflow orchestration for deterministic, AI-native runs",
   "keywords": [
     "workflow",
