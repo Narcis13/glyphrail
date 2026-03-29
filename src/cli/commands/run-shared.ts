@@ -39,7 +39,16 @@ export async function resolveRunInput(
   let input: JsonValue = {};
 
   if (inputFile) {
-    input = await readJsonFile<JsonValue>(resolve(context.cwd, inputFile), "INPUT_VALIDATION_ERROR");
+    const trimmed = inputFile.trim()
+    if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
+      try {
+        input = JSON.parse(trimmed) as JsonValue
+      } catch {
+        input = await readJsonFile<JsonValue>(resolve(context.cwd, inputFile), "INPUT_VALIDATION_ERROR")
+      }
+    } else {
+      input = await readJsonFile<JsonValue>(resolve(context.cwd, inputFile), "INPUT_VALIDATION_ERROR")
+    }
   } else if (inputJson) {
     try {
       input = JSON.parse(inputJson) as JsonValue;

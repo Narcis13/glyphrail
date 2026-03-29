@@ -2,9 +2,13 @@ import { createFailure, exitCodeForErrorCode } from "../core/errors";
 import type { JsonObject, JsonValue } from "../core/json-schema";
 import { stringifyJson } from "../util/json";
 import type { AgentAdapter } from "./contracts";
+import { claudeCodeAdapter } from "./claude-code-adapter";
 import { mockAgentAdapter } from "./mock-adapter";
 
-const BUILTIN_ADAPTERS = new Map<string, AgentAdapter>([[mockAgentAdapter.name, mockAgentAdapter]]);
+const BUILTIN_ADAPTERS = new Map<string, AgentAdapter>([
+  [mockAgentAdapter.name, mockAgentAdapter],
+  [claudeCodeAdapter.name, claudeCodeAdapter],
+]);
 
 export function getAgentAdapter(provider: string): AgentAdapter {
   const adapter = BUILTIN_ADAPTERS.get(provider);
