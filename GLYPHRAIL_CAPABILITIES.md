@@ -944,7 +944,7 @@ Before every invocation:
 
 ### Current Status
 
-The agent system is designed for extensibility but currently ships with only the **mock adapter** for deterministic testing.
+The agent system ships with two built-in adapters: the **mock adapter** for deterministic testing and the **claude-code adapter** for headless Claude Code integration.
 
 ### Agent Adapter Interface
 
@@ -1007,6 +1007,79 @@ meta:
   mockResponses:
     - error: { code: "TIMEOUT", message: "First attempt fails" }
     - output: { result: "success" }   # Second attempt succeeds
+```
+
+### Claude Code Adapter (`claude-code`)
+
+Runs Claude Code in headless mode (`claude --print`) as the AI backend. Requires the `claude` CLI installed and authenticated.
+
+```yaml
+- id: analyze
+  kind: agent
+  mode: structured
+  provider: claude-code
+  model: sonnet
+  objective: "Analyze the input data"
+  instructions: "Return a JSON object with summary and keyPoints fields"
+  input: ${state.data}
+  outputSchema:
+    type: object
+    properties:
+      summary: { type: string }
+      keyPoints: { type: array, items: { type: string } }
+    required: [summary, keyPoints]
+  save: state.analysis
+  meta:
+    maxTurns: 1
+    allowedTools: [Read, Grep]
+```
+
+#### Meta Options
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `claudeBinary` | string | `"claude"` | Path to the claude CLI binary |
+| `claudeFlags` | string[] | `[]` | Extra CLI flags (e.g., `["--no-input"]`) |
+| `cwd` | string | `process.cwd()` | Working directory for the claude process |
+| `env` | Record | `{}` | Extra environment variables |
+| `maxTurns` | number | — | Limit claude agentic turns (`--max-turns`) |
+| `systemPrompt` | string | — | Prepended to the assembled prompt |
+| `verbose` | boolean | `false` | Pass `--verbose` to claude |
+| `allowedTools` | string[] | — | Restrict claude's available tools (`--allowedTools`) |
+| `mcpConfig` | string | — | MCP server config JSON string (`--mcp-config`) |
+
+#### Environment Variable Override
+
+Set `GLYPHRAIL_CLAUDE_BINARY` to override the claude binary path globally (takes precedence over default, but `meta.claudeBinary` overrides it).
+
+#### How It Works
+
+1. Builds a prompt from `objective` + `instructions` + `input` + `outputSchema`
+2. Spawns `claude --print --output-format text` with assembled args
+3. Writes the prompt to stdin and captures stdout/stderr
+4. Parses JSON from output (handles code fences, wrapped envelopes, embedded JSON fragments)
+5. On non-zero exit, returns a retryable error (except exit code 2 = non-retryable CLI usage error)
+6. On timeout, sends SIGTERM then SIGKILL after 3s grace period
+
+#### Prompt Assembly
+
+```
+[System prompt (if provided)]
+---
+Objective:
+<objective text>
+
+Instructions:
+<instructions text>
+
+Input JSON:
+<formatted JSON>
+
+Output Requirements:
+Respond with ONLY a valid JSON object matching this schema — no markdown fences, no explanation, just raw JSON:
+<outputSchema JSON>
+
+Note: This is retry attempt N. (if attempt > 1)
 ```
 
 ### Output Repair Pipeline

@@ -22,7 +22,7 @@ src/
   core/           Execution engine, runtime state, expression engine, run store, errors
   dsl/            Workflow schema, validation, normalization, linting
   tools/          Tool contracts, registry, runtime invocation, 5 built-in tools
-  agent/          Agent adapter contracts, prompt building, mock adapter
+  agent/          Agent adapter contracts, prompt building, mock adapter, claude-code adapter
   config/         Project config discovery and defaults
   util/           FS, JSON, YAML, ID generation, timestamps, templates
 test/
@@ -45,7 +45,7 @@ CLI -> Parser -> Commands -> Execution Engine -> Runtime State
                                               -> Expression Engine
                                               -> Run Store (persistence)
                                               -> Tool Registry -> Tool Runtime -> Built-in Tools
-                                              -> Agent Runtime -> Mock Adapter
+                                              -> Agent Runtime -> Mock Adapter / Claude Code Adapter
                           -> DSL Validation -> Normalization -> Expression Engine
                           -> Config (lazy-loaded once per invocation)
 ```

@@ -78,7 +78,7 @@ steps:
 |------|-----------|---------|
 | `assign` | `set: {k: v}` | Write to state |
 | `tool` | `tool, input, save/append/merge` | Invoke registered tool |
-| `agent` | `mode: structured, provider, objective, outputSchema, save` | Bounded LLM call |
+| `agent` | `mode: structured, provider, objective, outputSchema, save` | Bounded LLM call (providers: `mock`, `claude-code`) |
 | `if` | `condition, then, else` | Branch |
 | `for_each` | `items, as, steps` | Iterate |
 | `while` | `condition, maxIterations, steps` | Bounded loop |
@@ -109,6 +109,40 @@ onError:
 - `merge: state.path` - deep merge into object
 
 For full workflow YAML reference, see [workflow-authoring.md](references/workflow-authoring.md).
+
+## Agent Adapters
+
+### `mock` — Deterministic testing (scripted responses via `meta.mockResponse`)
+
+### `claude-code` — Claude Code headless adapter
+
+Uses `claude --print` (headless mode) as the AI backend. Requires `claude` CLI installed and authenticated.
+
+```yaml
+- id: analyze
+  kind: agent
+  mode: structured
+  provider: claude-code
+  model: sonnet
+  objective: "Analyze the input data"
+  instructions: "Return a JSON object with summary and keyPoints fields"
+  input: ${state.data}
+  outputSchema:
+    type: object
+    properties:
+      summary: { type: string }
+      keyPoints: { type: array, items: { type: string } }
+    required: [summary, keyPoints]
+  save: state.analysis
+  meta:
+    maxTurns: 1                    # limit claude agentic turns
+    allowedTools: [Read, Grep]     # restrict claude's tools
+    claudeFlags: ["--no-input"]    # extra CLI flags
+```
+
+Meta options: `claudeBinary` (override binary path), `claudeFlags` (extra CLI flags), `cwd` (working directory), `env` (extra env vars), `maxTurns` (limit agentic turns), `systemPrompt` (prepended to prompt), `verbose` (pass --verbose), `allowedTools` (restrict claude tools), `mcpConfig` (MCP server config JSON).
+
+Env var `GLYPHRAIL_CLAUDE_BINARY` overrides the binary path globally.
 
 ## Tool Operations
 

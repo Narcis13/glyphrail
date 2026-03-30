@@ -62,7 +62,10 @@ Write directives: `save` (replace), `append` (push to array), `merge` (deep merg
 
 ### agent (structured mode only)
 
+Providers: `mock` (deterministic testing), `claude-code` (headless Claude Code via `claude --print`).
+
 ```yaml
+# Mock adapter (for testing)
 - id: classify
   kind: agent
   mode: structured
@@ -80,7 +83,28 @@ Write directives: `save` (replace), `append` (push to array), `merge` (deep merg
   meta:
     mockResponse:
       output: { category: positive }
+
+# Claude Code adapter (for production)
+- id: classify
+  kind: agent
+  mode: structured
+  provider: claude-code
+  model: sonnet
+  objective: Classify the text
+  instructions: Return positive, negative, or neutral
+  input: ${state.text}
+  outputSchema:
+    type: object
+    properties:
+      category: { type: string, enum: [positive, negative, neutral] }
+    required: [category]
+  save: state.classification
+  meta:
+    maxTurns: 1
+    allowedTools: [Read, Grep]
 ```
+
+Claude Code meta options: `claudeBinary`, `claudeFlags`, `cwd`, `env`, `maxTurns`, `systemPrompt`, `verbose`, `allowedTools`, `mcpConfig`. Env var `GLYPHRAIL_CLAUDE_BINARY` overrides the binary path globally.
 
 ### if
 
