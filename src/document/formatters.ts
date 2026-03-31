@@ -66,6 +66,33 @@ formatters.set("lower", (value: unknown): string => {
   return stringify(value).toLowerCase()
 })
 
+formatters.set("date", (value: unknown, format?: string): string => {
+  if (value == null) return ""
+  const d = value instanceof Date ? value : new Date(String(value))
+  if (Number.isNaN(d.getTime())) return stringify(value)
+
+  if (!format || format === "iso") return d.toISOString()
+  if (format === "date") return d.toLocaleDateString("en-US")
+  if (format === "time") return d.toLocaleTimeString("en-US")
+  if (format === "datetime") return d.toLocaleString("en-US")
+  if (format === "short") return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+  if (format === "long") return d.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" })
+  if (format === "relative") {
+    const now = Date.now()
+    const diff = now - d.getTime()
+    const seconds = Math.floor(Math.abs(diff) / 1000)
+    const minutes = Math.floor(seconds / 60)
+    const hours = Math.floor(minutes / 60)
+    const days = Math.floor(hours / 24)
+    const suffix = diff >= 0 ? "ago" : "from now"
+    if (seconds < 60) return `${seconds}s ${suffix}`
+    if (minutes < 60) return `${minutes}m ${suffix}`
+    if (hours < 24) return `${hours}h ${suffix}`
+    return `${days}d ${suffix}`
+  }
+  return d.toISOString()
+})
+
 formatters.set("truncate", (value: unknown, maxLength?: string): string => {
   const str = stringify(value)
   const limit = Number(maxLength) || 100

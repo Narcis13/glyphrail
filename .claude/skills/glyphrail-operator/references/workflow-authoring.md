@@ -167,7 +167,7 @@ Claude Code meta options: `claudeBinary`, `claudeFlags`, `cwd`, `env`, `maxTurns
 
 ## Expressions
 
-`${...}` syntax. Available scopes: `input`, `state`, `env`, `context`, `item`, `branch`.
+`${...}` syntax. Available scopes: `input`, `state`, `env`, `context`, `item`, `branch`, `output` (in document templates).
 
 Operators: `==`, `!=`, `&&`, `||`, `+`, `-`, `*`, `/`, `%`, `!`, parentheses.
 

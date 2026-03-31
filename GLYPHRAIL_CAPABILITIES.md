@@ -16,6 +16,7 @@ A comprehensive reference for every capability, feature, and integration point i
 8. [Tool System](#8-tool-system)
 9. [Agent System](#9-agent-system)
 10. [Execution Engine](#10-execution-engine)
+10b. [Glyphrail Documents (.gr.md)](#10b-glyphrail-documents-grmd)
 11. [Persistence & Checkpointing](#11-persistence--checkpointing)
 12. [Run Inspection & Debugging](#12-run-inspection--debugging)
 13. [Error Handling & Policies](#13-error-handling--policies)
@@ -48,6 +49,7 @@ Glyphrail is a **deterministic workflow orchestration engine** designed from the
 5. **Resumes paused runs** from checkpoints without replaying completed steps
 6. **Manages tools** with a typed registry, input/output validation, and policy enforcement
 7. **Scaffolds projects** with templates for config, tools, and workflows
+8. **Renders documents** (`.gr.md`) combining workflow frontmatter with Markdown templates that fill in with execution results
 
 ### Key Properties
 
@@ -302,6 +304,57 @@ gr run workflows/task.gr.yaml --no-checkpoint --json
 | `--no-checkpoint` | boolean | Disable per-step checkpointing |
 
 Returns: run result with runId, status, output, state, counters, artifact paths.
+
+#### `render <file.gr.md>`
+
+Execute a `.gr.md` document workflow and render its Markdown template with results.
+
+```bash
+gr render docs/report.gr.md --json
+gr render docs/report.gr.md --input-json '{"name": "World"}' --json
+gr render docs/report.gr.md --output report.md --json
+gr render docs/report.gr.md --dry-run --json
+```
+
+| Option | Type | Description |
+|--------|------|-------------|
+| `<file.gr.md>` | positional | Path to `.gr.md` document |
+| `--input <file>` | string | Read input from JSON file |
+| `--input-json <json>` | string | Inline JSON input |
+| `--output <file>` | string | Write rendered Markdown to file |
+| `--dry-run` | boolean | Validate without executing |
+| `--no-checkpoint` | boolean | Skip checkpointing |
+| `--max-steps <n>` | string | Override max run steps |
+| `--max-duration-ms <n>` | string | Override max run duration |
+| `--from-run <id>` | string | Re-render template against past run results (skip execution) |
+| `--format <format>` | string | Output format: `markdown` (default) or `html` |
+| `--watch` | boolean | Watch file and smart re-render on changes |
+
+Returns: JSON envelope with `runId`, `status`, `rendered` (Markdown/HTML string), `output`, `artifacts`, `templateWarnings`.
+
+Rendered documents are persisted as `rendered.md` and `source.gr.md` alongside standard run artifacts.
+
+`--from-run` enables iterating on the template without re-executing the workflow. `--watch` hashes frontmatter and body separately — body-only changes re-render from cached run data, frontmatter changes trigger full re-execution.
+
+#### `document validate <file.gr.md>`
+
+Validate both the workflow frontmatter and the template body of a `.gr.md` document without executing.
+
+```bash
+gr document validate docs/report.gr.md --json
+```
+
+Returns: validation results with error/warning counts, individual issues with line numbers, and workflow metadata if parseable.
+
+#### `document explain <file.gr.md>`
+
+Explain both workflow and template structure of a `.gr.md` document.
+
+```bash
+gr document explain docs/report.gr.md --json
+```
+
+Returns: workflow metadata (name, steps, tools), template analysis (interpolations, formatters, blocks, nesting depth), and validation status.
 
 #### `resume <run-id>`
 
@@ -715,6 +768,7 @@ ${<expression>}
 | `context` | Step execution context (stepId, loopIndex) | Read-only |
 | `item` | Current `for_each` item | Read-only (loop-scoped) |
 | `branch` | Current `parallel` branch | Read-only (branch-scoped) |
+| `output` | Workflow output (in document templates) | Read-only (template-scoped) |
 
 ### Operators
 
@@ -1184,6 +1238,188 @@ Tracked per run and persisted in metadata:
 
 ---
 
+## 10b. Glyphrail Documents (.gr.md)
+
+### Overview
+
+A `.gr.md` file combines a Glyphrail workflow (YAML frontmatter) with a Markdown template (body). When rendered via `gr render`, the workflow executes and the template body fills itself in with the results — producing a living, traceable document.
+
+This is **result-first authoring**: you start with the document you want to exist, and the workflow makes it real.
+
+### Document Format
+
+```markdown
+---
+version: "1.0"
+name: weekly-status
+inputSchema:
+  type: object
+  properties:
+    team: { type: string }
+  required: [team]
+state:
+  data: null
+steps:
+  - id: gather
+    kind: tool
+    tool: bash
+    input:
+      command: "echo gathered data"
+    save: state.data
+output:
+  data: ${state.data}
+  team: ${input.team}
+---
+
+# Status Report: ${output.team}
+
+## Data
+
+${output.data | json}
+
+---
+*Generated on ${context.startedAt} | Run ${context.runId}*
+```
+
+**Rules:**
+1. Frontmatter MUST be a complete, valid Glyphrail workflow (all existing DSL rules apply)
+2. Body is Markdown with `${expr}` inline interpolations and pipe formatters
+3. Body scope includes: `input`, `state` (final), `output`, `context`, `env`
+4. Empty body is valid — equivalent to a regular `.gr.yaml` workflow
+5. Source `.gr.md` is never mutated; rendered output is a separate artifact
+
+### Template Syntax
+
+#### Inline Interpolation — `${expr}`
+
+Reuses the existing expression engine. Any valid workflow expression works:
+
+```markdown
+Revenue: ${output.metrics.revenue}
+Full name: ${input.firstName + " " + input.lastName}
+```
+
+Values are stringified for insertion. `null`/`undefined` render as empty string.
+
+#### Pipe Formatters — `${expr | formatter}`
+
+Transform values into Markdown-friendly strings:
+
+| Formatter | Input | Output |
+|-----------|-------|--------|
+| `bullets` | array | Bullet list (`- item`) |
+| `numbered` | array | Numbered list (`1. item`) |
+| `table` | array of objects | Markdown table |
+| `json` | any | Pretty JSON in code fence |
+| `code "lang"` | string | Fenced code block with language |
+| `default "fallback"` | any | Fallback for null/undefined |
+| `fixed N` | number | `toFixed(N)` |
+| `upper` | string | UPPERCASE |
+| `lower` | string | lowercase |
+| `truncate N` | string | Truncated with `...` |
+| `date "fmt"` | timestamp/string | Formatted date |
+
+`date` format args: `iso` (default), `date`, `time`, `datetime`, `short`, `long`, `relative`.
+
+Formatters are pure functions — no side effects.
+
+#### Block Directives
+
+Control flow within templates using `{{#...}}` syntax:
+
+**Iteration** — `{{#each expr as binding}} ... {{/each}}`:
+
+```markdown
+{{#each output.items as item}}
+- **${item.name}**: ${item.description}
+{{/each}}
+```
+
+Evaluates the items expression (must be an array), then renders the body once per element with the binding variable added to scope.
+
+**Conditionals** — `{{#if expr}} ... {{#else}} ... {{/if}}`:
+
+```markdown
+{{#if output.hasBlockers}}
+Blockers:
+{{#each output.blockers as b}}
+> ${b}
+{{/each}}
+{{#else}}
+No blockers.
+{{/if}}
+```
+
+Blocks can be nested to arbitrary depth. Block binding variables become dynamic scope roots (e.g., `item` in `{{#each ... as item}}`).
+
+#### Escape Hatch
+
+Literal `${...}` that shouldn't be interpolated: prefix with backslash `\${this.is.literal}`.
+
+#### HTML Output Format
+
+Use `--format html` on the `render` command to produce a standalone HTML document instead of Markdown. The converter handles headings, lists, tables, code blocks, blockquotes, bold, italic, and inline code with clean default styling.
+
+### Template Scope
+
+| Scope | Description |
+|-------|-------------|
+| `input` | Original workflow input |
+| `state` | Final state after execution |
+| `output` | Workflow output |
+| `context` | Run metadata (`runId`, `workflowName`, `startedAt`) |
+| `env` | Environment variables |
+
+### Persistence
+
+Rendered documents are stored alongside standard run artifacts:
+
+```
+.glyphrail/runs/run_<id>/
+  meta.json, input.json, state.latest.json, output.json, trace.jsonl  # standard
+  rendered.md      # the rendered Markdown document
+  source.gr.md     # copy of source for reproducibility
+```
+
+### Error Handling
+
+| Code | Exit Code | When |
+|------|-----------|------|
+| `DOCUMENT_PARSE_ERROR` | 3 | Frontmatter splitting fails |
+| `TEMPLATE_PARSE_ERROR` | 3 | Template syntax error |
+| `TEMPLATE_RENDER_ERROR` | 5 | Expression evaluation fails during render |
+| `TEMPLATE_VALIDATION_ERROR` | 3 | Template references invalid roots or formatters |
+
+Template expression errors are collected as warnings rather than hard failures — the document renders with empty values where expressions fail.
+
+### Document Validation
+
+`gr document validate <file.gr.md>` validates both the workflow frontmatter and template body without executing. Checks:
+- YAML structure and workflow schema validity
+- Step references, tool names, expression syntax in frontmatter
+- Template expression validity, formatter existence, block nesting
+
+### Document Explain
+
+`gr document explain <file.gr.md>` provides structural analysis of both workflow and template:
+- Workflow metadata (name, version, steps, tools, policies)
+- Template analysis (interpolations, formatters used, each/if blocks, nesting depth)
+- Validation status
+
+### Re-Render from Past Run
+
+`gr render <file.gr.md> --from-run <run-id>` re-renders the current template body against a past run's persisted state, output, and input — without re-executing the workflow. This enables iterating on template wording and formatting without paying the execution cost each time.
+
+### Watch Mode
+
+`gr render <file.gr.md> --watch --output <file>` watches the `.gr.md` file for changes and automatically re-renders. It hashes frontmatter and body separately:
+- **Body-only change**: re-renders from the cached run (skips execution)
+- **Frontmatter change**: triggers full re-execution
+
+Requires `--output` to write results to a file. Runs until interrupted (SIGINT/SIGTERM).
+
+---
+
 ## 11. Persistence & Checkpointing
 
 ### Run Artifact Structure
@@ -1195,7 +1431,9 @@ Tracked per run and persisted in metadata:
 ├── state.latest.json      # Latest state snapshot
 ├── output.json            # Final output (written on completion)
 ├── trace.jsonl            # Append-only trace events (one JSON per line)
-└── checkpoints/           # Per-step state snapshots
+├── checkpoints/           # Per-step state snapshots
+├── rendered.md            # Rendered document (for .gr.md runs only)
+└── source.gr.md           # Source document copy (for .gr.md runs only)
     ├── <step-id>.json     # Checkpoint after step completion
     └── ...
 ```
@@ -1540,6 +1778,14 @@ import type { GlyphrailConfig } from "glyphrail";
 import { EXIT_CODES, WORKFLOW_STEP_KINDS, DEFAULT_CONFIG } from "glyphrail";
 import { SCHEMA_CATALOG, SCHEMA_DOCUMENTS } from "glyphrail";
 import { VERSION, SCHEMA_VERSION } from "glyphrail";
+
+// Document system (Glyphrail Documents — .gr.md)
+import type { ParsedGrDocument, DocumentRenderScope, DocumentRenderResult, TemplateNode, TemplateIssue } from "glyphrail";
+import { parseGrDocument } from "glyphrail";
+import { parseTemplate, evaluateTemplate } from "glyphrail";
+import { validateTemplate } from "glyphrail";
+import { renderDocument, reRenderFromRun } from "glyphrail";
+import { markdownToHtml } from "glyphrail";
 ```
 
 ---
@@ -1612,6 +1858,7 @@ Templates in `templates/` directory are used by `init` and `workflow create`. Th
 | Non-mock agent adapters | Interface ready, no implementations | Only mock adapter ships |
 | Workflow imports/packaging | Not started | Mentioned in spec as non-MVP |
 | `jsonl` output mode | Partially | Only used for trace event persistence |
+| Document composition/imports | Not started | Template inheritance, document chains (Phase 4) |
 | Interactive pause/resume | Not started | Pause modeled via metadata, no interactive protocol |
 
 ### Known Constraints

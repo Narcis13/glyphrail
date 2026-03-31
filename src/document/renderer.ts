@@ -3,8 +3,9 @@ import { resolve } from "node:path"
 import type { ResolvedProjectConfig } from "../config"
 import { executeWorkflow, type ExecuteWorkflowResult } from "../core/execution-engine"
 import type { JsonValue } from "../core/json-schema"
+import type { JsonObject } from "../core/json-schema"
 import type { WorkflowDocument } from "../core/ast"
-import { getRunPaths, toArtifactPaths, type RunPaths } from "../core/run-store"
+import { getRunPaths, readRunMeta, readRunOutput, readRunState, toArtifactPaths, type RunPaths } from "../core/run-store"
 import { readTextFile, writeTextFile } from "../util/fs"
 import { parseYaml } from "../util/yaml"
 import { validateWorkflowDocument, lintWorkflow } from "../dsl/validation"
@@ -22,6 +23,12 @@ export interface RenderDocumentOptions {
   maxRunDurationMs?: number
   checkpointEveryStep?: boolean
   dryRun?: boolean
+}
+
+export interface ReRenderFromRunOptions {
+  project: ResolvedProjectConfig
+  filePath: string
+  runId: string
 }
 
 export interface RenderDocumentResult extends DocumentRenderResult {
@@ -111,6 +118,70 @@ export async function renderDocument(options: RenderDocumentOptions): Promise<Re
     templateWarnings: warnings,
     workflow,
     relativeFilePath
+  }
+}
+
+export async function reRenderFromRun(options: ReRenderFromRunOptions): Promise<RenderDocumentResult> {
+  const { project, filePath, runId } = options
+
+  const paths = getRunPaths(project, runId)
+  const meta = await readRunMeta(paths)
+  const state = await readRunState(paths)
+  const output = await readRunOutput(paths)
+
+  let input: JsonValue = {}
+  try {
+    const { readJsonFile } = await import("../util/json")
+    input = await readJsonFile<JsonValue>(paths.input, "NOT_FOUND")
+  } catch {
+    // input may not exist for all runs
+  }
+
+  const content = await readTextFile(filePath)
+  const doc = parseGrDocument(content, filePath)
+
+  const rawWorkflow = parseYaml<unknown>(doc.frontmatterRaw, filePath)
+  const validation = await validateWorkflowDocument(rawWorkflow, {
+    toolsEntryPath: resolveProjectPath(project, project.config.toolsEntry)
+  })
+
+  if (!validation.workflow || validation.errors.length > 0) {
+    throw createFailure(
+      "DOCUMENT_PARSE_ERROR",
+      `Workflow validation failed in document frontmatter: ${filePath}`,
+      EXIT_CODES.workflowValidationFailure,
+      { errors: validation.errors }
+    )
+  }
+
+  const workflow = validation.workflow
+
+  const scope: DocumentRenderScope = {
+    input,
+    state,
+    output: (output && typeof output === "object" && !Array.isArray(output)
+      ? output
+      : { value: output }) as Record<string, unknown>,
+    context: {
+      runId: meta.runId,
+      workflowName: meta.workflow.name,
+      startedAt: meta.startedAt
+    },
+    env: process.env as Record<string, string | undefined>
+  }
+
+  const templateNodes = parseTemplate(doc.templateBody)
+  const { rendered, warnings } = evaluateTemplate(templateNodes, scope)
+
+  return {
+    runId: meta.runId,
+    status: meta.status,
+    rendered,
+    output: output ?? {},
+    artifacts: toArtifactPaths(paths, project),
+    templateWarnings: warnings,
+    workflow,
+    relativeFilePath: filePath
   }
 }
 

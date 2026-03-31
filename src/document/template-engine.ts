@@ -1,22 +1,104 @@
 import { evaluateExpression, type ExpressionScope } from "../core/expression-engine"
 import { createFailure, EXIT_CODES } from "../core/errors"
-import type { TemplateNode, InterpolationNode, TextNode, TemplateIssue } from "./contracts"
+import type { TemplateNode, InterpolationNode, TextNode, EachBlockNode, IfBlockNode, TemplateIssue } from "./contracts"
 import { getFormatter, stringifyValue } from "./formatters"
 
+interface ParseContext {
+  lines: string[]
+  index: number
+}
+
 export function parseTemplate(body: string): TemplateNode[] {
-  const nodes: TemplateNode[] = []
   const lines = body.split("\n")
+  const ctx: ParseContext = { lines, index: 0 }
+  return parseNodes(ctx, null)
+}
 
-  for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
-    const line = lines[lineIndex] as string
-    const lineNumber = lineIndex + 1
+function parseNodes(ctx: ParseContext, endDirective: "each" | "if" | null): TemplateNode[] {
+  const nodes: TemplateNode[] = []
+  let hasContent = false
 
-    if (lineIndex > 0) {
-      nodes.push({ type: "text", value: "\n", line: lineNumber })
+  while (ctx.index < ctx.lines.length) {
+    const line = ctx.lines[ctx.index] as string
+    const trimmed = line.trim()
+    const lineNumber = ctx.index + 1
+
+    if (endDirective === "each" && trimmed === "{{/each}}") {
+      ctx.index++
+      return nodes
+    }
+    if (endDirective === "if" && trimmed === "{{/if}}") {
+      ctx.index++
+      return nodes
     }
 
+    if (endDirective === "if" && trimmed === "{{#else}}") {
+      return nodes
+    }
+
+    const eachMatch = trimmed.match(/^\{\{#each\s+(.+?)\s+as\s+(\w+)\}\}$/)
+    if (eachMatch) {
+      if (hasContent) {
+        nodes.push({ type: "text", value: "\n", line: lineNumber })
+      }
+      const openLine = lineNumber
+      ctx.index++
+      const bodyNodes = parseNodes(ctx, "each")
+      nodes.push({
+        type: "each",
+        itemsExpression: eachMatch[1] as string,
+        binding: eachMatch[2] as string,
+        body: bodyNodes,
+        line: openLine
+      })
+      hasContent = true
+      continue
+    }
+
+    const ifMatch = trimmed.match(/^\{\{#if\s+(.+?)\}\}$/)
+    if (ifMatch) {
+      if (hasContent) {
+        nodes.push({ type: "text", value: "\n", line: lineNumber })
+      }
+      const openLine = lineNumber
+      ctx.index++
+      const thenBody = parseNodes(ctx, "if")
+
+      let elseBody: TemplateNode[] | undefined
+      if (ctx.index < ctx.lines.length) {
+        const nextTrimmed = (ctx.lines[ctx.index] as string).trim()
+        if (nextTrimmed === "{{#else}}") {
+          ctx.index++
+          elseBody = parseNodes(ctx, "if")
+        }
+      }
+
+      nodes.push({
+        type: "if",
+        condition: ifMatch[1] as string,
+        thenBody,
+        elseBody,
+        line: openLine
+      })
+      hasContent = true
+      continue
+    }
+
+    if (hasContent) {
+      nodes.push({ type: "text", value: "\n", line: lineNumber })
+    }
     const lineNodes = parseLineInterpolations(line, lineNumber)
     nodes.push(...lineNodes)
+    hasContent = true
+    ctx.index++
+  }
+
+  if (endDirective) {
+    throw createFailure(
+      "TEMPLATE_PARSE_ERROR",
+      `Unterminated {{#${endDirective}}} block`,
+      EXIT_CODES.workflowValidationFailure
+    )
   }
 
   return nodes
@@ -201,6 +283,16 @@ export function evaluateTemplate(
       continue
     }
 
+    if (node.type === "each") {
+      rendered += evaluateEachBlock(node, scope, warnings)
+      continue
+    }
+
+    if (node.type === "if") {
+      rendered += evaluateIfBlock(node, scope, warnings)
+      continue
+    }
+
     try {
       const wrappedExpr = `\${${node.expression}}`
       let value = evaluateExpression(wrappedExpr, scope)
@@ -231,4 +323,66 @@ export function evaluateTemplate(
   }
 
   return { rendered, warnings }
+}
+
+function evaluateEachBlock(
+  node: EachBlockNode,
+  scope: ExpressionScope,
+  warnings: TemplateIssue[]
+): string {
+  try {
+    const wrappedExpr = `\${${node.itemsExpression}}`
+    const items = evaluateExpression(wrappedExpr, scope)
+
+    if (!Array.isArray(items)) {
+      warnings.push({
+        line: node.line,
+        message: `each block expression '${node.itemsExpression}' did not evaluate to an array`,
+        severity: "warning"
+      })
+      return ""
+    }
+
+    const parts: string[] = []
+    for (const item of items) {
+      const childScope = { ...scope, [node.binding]: item }
+      const { rendered, warnings: childWarnings } = evaluateTemplate(node.body, childScope)
+      warnings.push(...childWarnings)
+      parts.push(rendered)
+    }
+
+    return parts.join("\n")
+  } catch (error) {
+    warnings.push({
+      line: node.line,
+      message: `each block expression failed: ${node.itemsExpression} — ${error instanceof Error ? error.message : String(error)}`,
+      severity: "warning"
+    })
+    return ""
+  }
+}
+
+function evaluateIfBlock(
+  node: IfBlockNode,
+  scope: ExpressionScope,
+  warnings: TemplateIssue[]
+): string {
+  try {
+    const wrappedExpr = `\${${node.condition}}`
+    const condition = evaluateExpression(wrappedExpr, scope)
+
+    const body = condition ? node.thenBody : node.elseBody
+    if (!body || body.length === 0) return ""
+
+    const { rendered, warnings: childWarnings } = evaluateTemplate(body, scope)
+    warnings.push(...childWarnings)
+    return rendered
+  } catch (error) {
+    warnings.push({
+      line: node.line,
+      message: `if block condition failed: ${node.condition} — ${error instanceof Error ? error.message : String(error)}`,
+      severity: "warning"
+    })
+    return ""
+  }
 }

@@ -20,6 +20,8 @@ import { workflowCreateCommand } from "./workflow-create";
 import { workflowExplainCommand } from "./workflow-explain";
 import { workflowLintCommand } from "./workflow-lint";
 import { renderCommand } from "./render";
+import { documentExplainCommand } from "./document-explain";
+import { documentValidateCommand } from "./document-validate";
 import { workflowValidateCommand } from "./workflow-validate";
 
 import type { CommandDefinition } from "../types";
@@ -36,6 +38,8 @@ export const COMMANDS: CommandDefinition[] = [
   toolScaffoldCommand,
   runCommand,
   renderCommand,
+  documentExplainCommand,
+  documentValidateCommand,
   resumeCommand,
   runsExplainCommand,
   runsListCommand,

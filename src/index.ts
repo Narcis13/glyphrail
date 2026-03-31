@@ -19,8 +19,12 @@ export type {
   DocumentRenderScope,
   DocumentRenderResult,
   TemplateNode,
-  TemplateIssue
+  TemplateIssue,
+  EachBlockNode,
+  IfBlockNode
 } from "./document/contracts";
 export { parseGrDocument } from "./document/parser";
 export { parseTemplate, evaluateTemplate } from "./document/template-engine";
-export { renderDocument } from "./document/renderer";
+export { validateTemplate } from "./document/validation";
+export { renderDocument, reRenderFromRun } from "./document/renderer"
+export { markdownToHtml } from "./cli/commands/render";

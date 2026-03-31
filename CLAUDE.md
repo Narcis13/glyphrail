@@ -81,6 +81,9 @@ All commands support `--json` for machine-parseable output with `{ok: true/false
 | `tool call <name>` | Invoke tool directly with `--input` |
 | `tool validate` | Validate tool registry |
 | `tool scaffold` | Generate tool template |
+| `render <file.gr.md>` | Execute .gr.md document and render template (`--from-run`, `--watch`, `--format html`) |
+| `document validate <file>` | Validate .gr.md document without executing |
+| `document explain <file>` | Explain both workflow and template structure of a .gr.md document |
 | `workflow validate <file>` | Validate workflow YAML |
 | `workflow lint <file>` | Lint for warnings and risks |
 | `workflow explain <file>` | Explain workflow structure |
@@ -271,6 +274,48 @@ Run statuses: `running`, `completed`, `failed`, `paused`. Resume via `resume <ru
 - **Expression interpolation**: `${...}` evaluated anywhere strings are used
 - **Error annotation**: errors enriched with stepId/runId as they bubble up
 - **JSON envelope contract**: all `--json` output uses `{ok: true/false, ...}` wrapper
+
+## Document System (.gr.md)
+
+`.gr.md` files combine a workflow (YAML frontmatter) with a template body (Markdown with `${...}` interpolation and `{{#...}}` block directives).
+
+### Render Command Flags
+
+| Flag | Purpose |
+|------|---------|
+| `--input <file>` | JSON/YAML input file |
+| `--input-json <json>` | Inline JSON input |
+| `--output <file>` | Write rendered output to file |
+| `--dry-run` | Validate without executing |
+| `--from-run <id>` | Re-render template against past run results (skip execution) |
+| `--watch` | Watch file and smart re-render (body-only changes skip execution) |
+| `--format <md\|html>` | Output format: `markdown` (default) or `html` |
+
+### Template Syntax
+
+- `${expr}` — inline interpolation
+- `${expr | formatter arg1 arg2}` — interpolation with formatter
+- `{{#each expr as binding}} ... {{/each}}` — iteration
+- `{{#if expr}} ... {{#else}} ... {{/if}}` — conditional
+- `\${...}` — escaped (renders literal `${...}`)
+
+### Formatters (11 built-in)
+
+`bullets`, `numbered`, `table`, `json`, `code`, `default`, `fixed`, `upper`, `lower`, `truncate`, `date`
+
+The `date` formatter accepts format args: `iso` (default), `date`, `time`, `datetime`, `short`, `long`, `relative`.
+
+### Document Files
+
+```
+src/document/
+  contracts.ts       Type definitions (AST nodes, render scope, results)
+  parser.ts          Split .gr.md into frontmatter + template body
+  template-engine.ts Parse template to AST, evaluate against scope
+  formatters.ts      11 built-in formatters
+  renderer.ts        Orchestrate: parse → execute → render → persist
+  validation.ts      Pre-flight validation of template expressions and blocks
+```
 
 ## Not Yet Implemented
 

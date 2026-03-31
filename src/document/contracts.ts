@@ -15,7 +15,23 @@ export interface InterpolationNode {
   line: number
 }
 
-export type TemplateNode = TextNode | InterpolationNode
+export interface EachBlockNode {
+  type: "each"
+  itemsExpression: string
+  binding: string
+  body: TemplateNode[]
+  line: number
+}
+
+export interface IfBlockNode {
+  type: "if"
+  condition: string
+  thenBody: TemplateNode[]
+  elseBody?: TemplateNode[]
+  line: number
+}
+
+export type TemplateNode = TextNode | InterpolationNode | EachBlockNode | IfBlockNode
 
 export interface ParsedGrDocument {
   frontmatterRaw: string

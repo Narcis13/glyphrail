@@ -64,6 +64,27 @@ gr run <file> --no-checkpoint --json               # Skip checkpointing
 gr resume <run-id> --json                          # Resume paused run
 ```
 
+### Document Operations
+
+```bash
+gr document validate <file.gr.md> --json           # Validate workflow + template
+gr document explain <file.gr.md> --json            # Explain structure
+```
+
+### Document Rendering
+
+```bash
+gr render <file.gr.md> --json                      # Render document
+gr render <file.gr.md> --input-json '<json>' --json  # With input
+gr render <file.gr.md> --output out.md --json      # Write to file
+gr render <file.gr.md> --dry-run --json            # Validate only
+gr render <file.gr.md> --no-checkpoint --json      # Skip checkpointing
+gr render <file.gr.md> --from-run <id> --json      # Re-render from past run
+gr render <file.gr.md> --from-run <id> --output out.md  # Re-render to file
+gr render <file.gr.md> --format html --output out.html  # HTML output
+gr render <file.gr.md> --watch --output out.md     # Watch and auto re-render
+```
+
 ### Run Inspection
 
 ```bash

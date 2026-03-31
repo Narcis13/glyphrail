@@ -107,6 +107,41 @@ test("truncate formatter truncates long strings", () => {
   expect(fmt("short", "100")).toBe("short")
 })
 
+test("date formatter returns ISO by default", () => {
+  const fmt = getFormatter("date")!
+  const result = fmt("2025-01-15T10:30:00.000Z")
+  expect(result).toBe("2025-01-15T10:30:00.000Z")
+})
+
+test("date formatter with date format", () => {
+  const fmt = getFormatter("date")!
+  const result = fmt("2025-01-15T10:30:00.000Z", "date")
+  expect(result).toContain("2025")
+  expect(result).toContain("15")
+})
+
+test("date formatter with short format", () => {
+  const fmt = getFormatter("date")!
+  const result = fmt("2025-01-15T10:30:00.000Z", "short")
+  expect(result).toContain("2025")
+  expect(result).toContain("15")
+})
+
+test("date formatter returns empty for null", () => {
+  const fmt = getFormatter("date")!
+  expect(fmt(null)).toBe("")
+})
+
+test("date formatter returns original for invalid date", () => {
+  const fmt = getFormatter("date")!
+  expect(fmt("not-a-date")).toBe("not-a-date")
+})
+
+test("date formatter with iso format", () => {
+  const fmt = getFormatter("date")!
+  expect(fmt("2025-06-01T00:00:00.000Z", "iso")).toBe("2025-06-01T00:00:00.000Z")
+})
+
 test("hasFormatter returns true for built-ins and false for unknown", () => {
   expect(hasFormatter("bullets")).toBe(true)
   expect(hasFormatter("table")).toBe(true)
@@ -125,4 +160,5 @@ test("listFormatterNames includes all built-ins", () => {
   expect(names).toContain("upper")
   expect(names).toContain("lower")
   expect(names).toContain("truncate")
+  expect(names).toContain("date")
 })

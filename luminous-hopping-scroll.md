@@ -469,14 +469,14 @@ The CLI (`gr render`) is the foundation. The Obsidian plugin is the dream interf
 | 4 | Tests for blocks, nesting, validation | |
 | 5 | `playground/mvp/documents/report.gr.md` | Richer sample with blocks |
 
-### Phase 3: Advanced Features
+### Phase 3: Advanced Features ✅
 
-- `--from-run <id>` — re-render template against past run results (iterate on template without re-executing)
-- `--watch` — file watcher with smart re-render (hash frontmatter vs body separately; body-only changes skip execution)
-- HTML output format
-- Additional formatters: `date`, `truncate`, `fixed`, `upper`, `lower`
-- `gr document explain <file.gr.md>` — explain both workflow and template structure
-- Progressive rendering (stream partial results as steps complete)
+- ✅ `--from-run <id>` — re-render template against past run results (iterate on template without re-executing)
+- ✅ `--watch` — file watcher with smart re-render (hash frontmatter vs body separately; body-only changes skip execution)
+- ✅ HTML output format (`--format html`)
+- ✅ Additional formatters: `date`, `truncate`, `fixed`, `upper`, `lower`
+- ✅ `gr document explain <file.gr.md>` — explain both workflow and template structure
+
 
 ### Phase 4: Ecosystem
 
