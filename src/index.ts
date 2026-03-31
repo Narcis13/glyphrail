@@ -14,3 +14,13 @@ export type { GlyphrailConfig } from "./config/types";
 export { DEFAULT_CONFIG } from "./config/types";
 export { SCHEMA_CATALOG, SCHEMA_DOCUMENTS } from "./core/schema-documents";
 export { VERSION, SCHEMA_VERSION } from "./version";
+export type {
+  ParsedGrDocument,
+  DocumentRenderScope,
+  DocumentRenderResult,
+  TemplateNode,
+  TemplateIssue
+} from "./document/contracts";
+export { parseGrDocument } from "./document/parser";
+export { parseTemplate, evaluateTemplate } from "./document/template-engine";
+export { renderDocument } from "./document/renderer";

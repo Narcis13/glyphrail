@@ -113,4 +113,5 @@ export interface RunRecord {
   input?: JsonValue;
   output?: JsonValue;
   artifactPaths?: Partial<RunArtifactPaths>;
+  document?: { sourceFile: string; format: "markdown" | "html" };
 }

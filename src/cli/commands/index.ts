@@ -19,6 +19,7 @@ import { schemaCommand } from "./schema";
 import { workflowCreateCommand } from "./workflow-create";
 import { workflowExplainCommand } from "./workflow-explain";
 import { workflowLintCommand } from "./workflow-lint";
+import { renderCommand } from "./render";
 import { workflowValidateCommand } from "./workflow-validate";
 
 import type { CommandDefinition } from "../types";
@@ -34,6 +35,7 @@ export const COMMANDS: CommandDefinition[] = [
   toolValidateCommand,
   toolScaffoldCommand,
   runCommand,
+  renderCommand,
   resumeCommand,
   runsExplainCommand,
   runsListCommand,

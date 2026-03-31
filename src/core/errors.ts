@@ -116,7 +116,13 @@ export function exitCodeForErrorCode(code: string): number {
     return EXIT_CODES.invalidCliUsage;
   }
 
-  if (code === "WORKFLOW_PARSE_ERROR" || code === "WORKFLOW_VALIDATION_ERROR") {
+  if (
+    code === "WORKFLOW_PARSE_ERROR" ||
+    code === "WORKFLOW_VALIDATION_ERROR" ||
+    code === "DOCUMENT_PARSE_ERROR" ||
+    code === "TEMPLATE_PARSE_ERROR" ||
+    code === "TEMPLATE_VALIDATION_ERROR"
+  ) {
     return EXIT_CODES.workflowValidationFailure;
   }
 
@@ -135,7 +141,8 @@ export function exitCodeForErrorCode(code: string): number {
     code === "AGENT_OUTPUT_VALIDATION_ERROR" ||
     code === "TIMEOUT" ||
     code === "BUDGET_EXHAUSTION" ||
-    code === "CHECKPOINT_RESUME_ERROR"
+    code === "CHECKPOINT_RESUME_ERROR" ||
+    code === "TEMPLATE_RENDER_ERROR"
   ) {
     return EXIT_CODES.executionFailure;
   }

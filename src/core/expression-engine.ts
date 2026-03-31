@@ -58,9 +58,11 @@ export interface ExpressionScope {
   context?: Record<string, unknown>;
   item?: Record<string, unknown> | unknown;
   branch?: Record<string, unknown>;
+  output?: Record<string, unknown> | unknown;
+  [key: string]: unknown;
 }
 
-const SUPPORTED_ROOTS = new Set(["input", "state", "env", "context", "item", "branch"]);
+const SUPPORTED_ROOTS = new Set(["input", "state", "env", "context", "item", "branch", "output"]);
 
 export function isExpressionInterpolation(value: string): boolean {
   const trimmed = value.trim();
@@ -157,7 +159,7 @@ function visitExpression(node: ExpressionNode, visitor: (node: ExpressionNode) =
 
 function resolveReference(segments: string[], scope: ExpressionScope): unknown {
   const [root, ...rest] = segments;
-  if (!root || !SUPPORTED_ROOTS.has(root)) {
+  if (!root || (!SUPPORTED_ROOTS.has(root) && !(root in scope))) {
     throw createFailure(
       "EXPRESSION_EVALUATION_ERROR",
       `Unsupported expression root: ${root ?? "<empty>"}`,
@@ -165,7 +167,7 @@ function resolveReference(segments: string[], scope: ExpressionScope): unknown {
     );
   }
 
-  let current: unknown = scope[root as keyof ExpressionScope];
+  let current: unknown = (scope as Record<string, unknown>)[root];
   for (const segment of rest) {
     if (current == null || (typeof current !== "object" && !Array.isArray(current))) {
       return undefined;
