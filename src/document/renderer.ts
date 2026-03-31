@@ -1,4 +1,5 @@
-import { resolve } from "node:path"
+import { resolve, dirname } from "node:path"
+import { readFileSync } from "node:fs"
 
 import type { ResolvedProjectConfig } from "../config"
 import { executeWorkflow, type ExecuteWorkflowResult } from "../core/execution-engine"
@@ -11,9 +12,10 @@ import { parseYaml } from "../util/yaml"
 import { validateWorkflowDocument, lintWorkflow } from "../dsl/validation"
 import { resolveProjectPath } from "../config"
 import { createFailure, EXIT_CODES } from "../core/errors"
-import type { DocumentRenderResult, DocumentRenderScope, TemplateIssue } from "./contracts"
+import type { DocumentRenderResult, DocumentRenderScope, TemplateIssue, TemplateNode, BlockNode } from "./contracts"
 import { parseGrDocument } from "./parser"
-import { parseTemplate, evaluateTemplate } from "./template-engine"
+import { parseTemplate, evaluateTemplate, type EvaluateTemplateOptions } from "./template-engine"
+import { loadCustomFormatters } from "./custom-formatters"
 
 export interface RenderDocumentOptions {
   project: ResolvedProjectConfig
@@ -38,6 +40,8 @@ export interface RenderDocumentResult extends DocumentRenderResult {
 
 export async function renderDocument(options: RenderDocumentOptions): Promise<RenderDocumentResult> {
   const { project, filePath, input } = options
+
+  await loadCustomFormatters(project)
 
   const content = await readTextFile(filePath)
   const doc = parseGrDocument(content, filePath)
@@ -105,7 +109,14 @@ export async function renderDocument(options: RenderDocumentOptions): Promise<Re
     env: process.env as Record<string, string | undefined>
   }
 
-  const { rendered, warnings } = evaluateTemplate(templateNodes, scope)
+  const evalOptions: EvaluateTemplateOptions = { basePath: filePath }
+
+  const { nodes: resolvedNodes, overrides } = resolveInheritance(doc.extends, templateNodes, filePath)
+  if (overrides) {
+    evalOptions.blockOverrides = overrides
+  }
+
+  const { rendered, warnings } = evaluateTemplate(resolvedNodes, scope, evalOptions)
 
   await persistDocumentArtifacts(result, content, rendered, project)
 
@@ -123,6 +134,8 @@ export async function renderDocument(options: RenderDocumentOptions): Promise<Re
 
 export async function reRenderFromRun(options: ReRenderFromRunOptions): Promise<RenderDocumentResult> {
   const { project, filePath, runId } = options
+
+  await loadCustomFormatters(project)
 
   const paths = getRunPaths(project, runId)
   const meta = await readRunMeta(paths)
@@ -171,7 +184,14 @@ export async function reRenderFromRun(options: ReRenderFromRunOptions): Promise<
   }
 
   const templateNodes = parseTemplate(doc.templateBody)
-  const { rendered, warnings } = evaluateTemplate(templateNodes, scope)
+  const evalOptions: EvaluateTemplateOptions = { basePath: filePath }
+
+  const { nodes: resolvedNodes, overrides } = resolveInheritance(doc.extends, templateNodes, filePath)
+  if (overrides) {
+    evalOptions.blockOverrides = overrides
+  }
+
+  const { rendered, warnings } = evaluateTemplate(resolvedNodes, scope, evalOptions)
 
   return {
     runId: meta.runId,
@@ -183,6 +203,71 @@ export async function reRenderFromRun(options: ReRenderFromRunOptions): Promise<
     workflow,
     relativeFilePath: filePath
   }
+}
+
+function collectBlockOverrides(nodes: TemplateNode[]): Map<string, TemplateNode[]> {
+  const overrides = new Map<string, TemplateNode[]>()
+  for (const node of nodes) {
+    if (node.type === "block") {
+      overrides.set(node.name, node.body)
+    }
+  }
+  return overrides
+}
+
+function resolveInheritance(
+  extendsPath: string | undefined,
+  childNodes: TemplateNode[],
+  childFilePath: string,
+  chain: string[] = []
+): { nodes: TemplateNode[]; overrides?: Map<string, TemplateNode[]> } {
+  if (!extendsPath) {
+    return { nodes: childNodes }
+  }
+
+  const resolvedParentPath = resolve(dirname(childFilePath), extendsPath)
+
+  if (chain.includes(resolvedParentPath)) {
+    throw createFailure(
+      "DOCUMENT_PARSE_ERROR",
+      `Circular template inheritance detected: ${extendsPath} (chain: ${chain.join(" -> ")})`,
+      EXIT_CODES.workflowValidationFailure
+    )
+  }
+
+  let parentContent: string
+  try {
+    parentContent = readFileSync(resolvedParentPath, "utf-8")
+  } catch {
+    throw createFailure(
+      "DOCUMENT_PARSE_ERROR",
+      `Parent template not found: ${extendsPath} (resolved to ${resolvedParentPath})`,
+      EXIT_CODES.workflowValidationFailure
+    )
+  }
+
+  const parentDoc = parseGrDocument(parentContent, resolvedParentPath)
+  const parentNodes = parseTemplate(parentDoc.templateBody)
+
+  // Collect block overrides from child
+  const overrides = collectBlockOverrides(childNodes)
+
+  // If parent also extends, recurse — merge overrides up the chain
+  if (parentDoc.extends) {
+    const parentResult = resolveInheritance(
+      parentDoc.extends,
+      parentNodes,
+      resolvedParentPath,
+      [...chain, resolvedParentPath]
+    )
+    // Child overrides take priority over grandparent defaults
+    const mergedOverrides = parentResult.overrides
+      ? new Map([...parentResult.overrides, ...overrides])
+      : overrides
+    return { nodes: parentResult.nodes, overrides: mergedOverrides }
+  }
+
+  return { nodes: parentNodes, overrides }
 }
 
 async function persistDocumentArtifacts(

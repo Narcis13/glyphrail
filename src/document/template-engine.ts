@@ -1,6 +1,9 @@
+import { resolve, dirname } from "node:path"
+import { readFileSync } from "node:fs"
+
 import { evaluateExpression, type ExpressionScope } from "../core/expression-engine"
 import { createFailure, EXIT_CODES } from "../core/errors"
-import type { TemplateNode, InterpolationNode, TextNode, EachBlockNode, IfBlockNode, TemplateIssue } from "./contracts"
+import type { TemplateNode, InterpolationNode, TextNode, EachBlockNode, IfBlockNode, IncludeNode, BlockNode, TemplateIssue } from "./contracts"
 import { getFormatter, stringifyValue } from "./formatters"
 
 interface ParseContext {
@@ -14,7 +17,7 @@ export function parseTemplate(body: string): TemplateNode[] {
   return parseNodes(ctx, null)
 }
 
-function parseNodes(ctx: ParseContext, endDirective: "each" | "if" | null): TemplateNode[] {
+function parseNodes(ctx: ParseContext, endDirective: "each" | "if" | "block" | null): TemplateNode[] {
   const nodes: TemplateNode[] = []
   let hasContent = false
 
@@ -31,9 +34,48 @@ function parseNodes(ctx: ParseContext, endDirective: "each" | "if" | null): Temp
       ctx.index++
       return nodes
     }
+    if (endDirective === "block" && trimmed === "{{/block}}") {
+      ctx.index++
+      return nodes
+    }
 
     if (endDirective === "if" && trimmed === "{{#else}}") {
       return nodes
+    }
+
+    // Include directive
+    const includeMatch = trimmed.match(/^\{\{#include\s+(.+?)\}\}$/)
+    if (includeMatch) {
+      if (hasContent) {
+        nodes.push({ type: "text", value: "\n", line: lineNumber })
+      }
+      nodes.push({
+        type: "include",
+        filePath: (includeMatch[1] as string).trim(),
+        line: lineNumber
+      })
+      hasContent = true
+      ctx.index++
+      continue
+    }
+
+    // Block directive
+    const blockMatch = trimmed.match(/^\{\{#block\s+(\w+)\}\}$/)
+    if (blockMatch) {
+      if (hasContent) {
+        nodes.push({ type: "text", value: "\n", line: lineNumber })
+      }
+      const openLine = lineNumber
+      ctx.index++
+      const bodyNodes = parseNodes(ctx, "block")
+      nodes.push({
+        type: "block",
+        name: blockMatch[1] as string,
+        body: bodyNodes,
+        line: openLine
+      })
+      hasContent = true
+      continue
     }
 
     const eachMatch = trimmed.match(/^\{\{#each\s+(.+?)\s+as\s+(\w+)\}\}$/)
@@ -270,9 +312,16 @@ function splitFormatterArgs(formatterPart: string): string[] {
   return parts
 }
 
+export interface EvaluateTemplateOptions {
+  basePath?: string
+  includeStack?: string[]
+  blockOverrides?: Map<string, TemplateNode[]>
+}
+
 export function evaluateTemplate(
   nodes: TemplateNode[],
-  scope: ExpressionScope
+  scope: ExpressionScope,
+  options?: EvaluateTemplateOptions
 ): { rendered: string; warnings: TemplateIssue[] } {
   const warnings: TemplateIssue[] = []
   let rendered = ""
@@ -284,12 +333,22 @@ export function evaluateTemplate(
     }
 
     if (node.type === "each") {
-      rendered += evaluateEachBlock(node, scope, warnings)
+      rendered += evaluateEachBlock(node, scope, warnings, options)
       continue
     }
 
     if (node.type === "if") {
-      rendered += evaluateIfBlock(node, scope, warnings)
+      rendered += evaluateIfBlock(node, scope, warnings, options)
+      continue
+    }
+
+    if (node.type === "include") {
+      rendered += evaluateInclude(node, scope, warnings, options)
+      continue
+    }
+
+    if (node.type === "block") {
+      rendered += evaluateBlock(node, scope, warnings, options)
       continue
     }
 
@@ -328,7 +387,8 @@ export function evaluateTemplate(
 function evaluateEachBlock(
   node: EachBlockNode,
   scope: ExpressionScope,
-  warnings: TemplateIssue[]
+  warnings: TemplateIssue[],
+  options?: EvaluateTemplateOptions
 ): string {
   try {
     const wrappedExpr = `\${${node.itemsExpression}}`
@@ -346,7 +406,7 @@ function evaluateEachBlock(
     const parts: string[] = []
     for (const item of items) {
       const childScope = { ...scope, [node.binding]: item }
-      const { rendered, warnings: childWarnings } = evaluateTemplate(node.body, childScope)
+      const { rendered, warnings: childWarnings } = evaluateTemplate(node.body, childScope, options)
       warnings.push(...childWarnings)
       parts.push(rendered)
     }
@@ -365,7 +425,8 @@ function evaluateEachBlock(
 function evaluateIfBlock(
   node: IfBlockNode,
   scope: ExpressionScope,
-  warnings: TemplateIssue[]
+  warnings: TemplateIssue[],
+  options?: EvaluateTemplateOptions
 ): string {
   try {
     const wrappedExpr = `\${${node.condition}}`
@@ -374,7 +435,7 @@ function evaluateIfBlock(
     const body = condition ? node.thenBody : node.elseBody
     if (!body || body.length === 0) return ""
 
-    const { rendered, warnings: childWarnings } = evaluateTemplate(body, scope)
+    const { rendered, warnings: childWarnings } = evaluateTemplate(body, scope, options)
     warnings.push(...childWarnings)
     return rendered
   } catch (error) {
@@ -385,4 +446,75 @@ function evaluateIfBlock(
     })
     return ""
   }
+}
+
+function evaluateInclude(
+  node: IncludeNode,
+  scope: ExpressionScope,
+  warnings: TemplateIssue[],
+  options?: EvaluateTemplateOptions
+): string {
+  const basePath = options?.basePath
+  if (!basePath) {
+    warnings.push({
+      line: node.line,
+      message: `Cannot resolve include '${node.filePath}': no base path available`,
+      severity: "warning"
+    })
+    return ""
+  }
+
+  const resolvedPath = resolve(dirname(basePath), node.filePath)
+  const includeStack = options?.includeStack ?? []
+
+  if (includeStack.includes(resolvedPath)) {
+    warnings.push({
+      line: node.line,
+      message: `Circular include detected: ${node.filePath} (already in include chain)`,
+      severity: "error"
+    })
+    return ""
+  }
+
+  try {
+    const content = readFileSync(resolvedPath, "utf-8")
+    const childNodes = parseTemplate(content)
+    const childOptions: EvaluateTemplateOptions = {
+      basePath: resolvedPath,
+      includeStack: [...includeStack, resolvedPath],
+      blockOverrides: options?.blockOverrides
+    }
+    const { rendered, warnings: childWarnings } = evaluateTemplate(childNodes, scope, childOptions)
+    warnings.push(...childWarnings)
+    return rendered
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      warnings.push({
+        line: node.line,
+        message: `Include file not found: ${node.filePath}`,
+        severity: "error"
+      })
+    } else {
+      warnings.push({
+        line: node.line,
+        message: `Include failed: ${node.filePath} — ${error instanceof Error ? error.message : String(error)}`,
+        severity: "error"
+      })
+    }
+    return ""
+  }
+}
+
+function evaluateBlock(
+  node: BlockNode,
+  scope: ExpressionScope,
+  warnings: TemplateIssue[],
+  options?: EvaluateTemplateOptions
+): string {
+  const overrides = options?.blockOverrides
+  const body = overrides?.get(node.name) ?? node.body
+
+  const { rendered, warnings: childWarnings } = evaluateTemplate(body, scope, options)
+  warnings.push(...childWarnings)
+  return rendered
 }

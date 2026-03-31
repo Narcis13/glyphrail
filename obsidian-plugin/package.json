@@ -1,0 +1,15 @@
+{
+  "name": "obsidian-glyphrail",
+  "version": "0.1.0",
+  "description": "Obsidian plugin for Glyphrail .gr.md documents",
+  "type": "module",
+  "scripts": {
+    "build": "esbuild main.ts --bundle --external:obsidian --external:electron --format=cjs --outfile=main.js --platform=node --target=es2020",
+    "dev": "esbuild main.ts --bundle --external:obsidian --external:electron --format=cjs --outfile=main.js --platform=node --target=es2020 --watch"
+  },
+  "devDependencies": {
+    "obsidian": "^1.5.0",
+    "esbuild": "^0.20.0",
+    "@types/node": "^20.0.0"
+  }
+}

@@ -38,6 +38,23 @@ function validateNodes(nodes: TemplateNode[], issues: TemplateIssue[]): void {
       if (node.elseBody) {
         validateNodes(node.elseBody, issues)
       }
+    } else if (node.type === "include") {
+      if (!node.filePath || node.filePath.trim() === "") {
+        issues.push({
+          line: node.line,
+          message: "Include directive requires a file path",
+          severity: "error"
+        })
+      }
+    } else if (node.type === "block") {
+      if (!node.name || node.name.trim() === "") {
+        issues.push({
+          line: node.line,
+          message: "Block directive requires a name",
+          severity: "error"
+        })
+      }
+      validateNodes(node.body, issues)
     }
   }
 }

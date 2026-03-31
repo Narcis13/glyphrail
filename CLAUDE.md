@@ -299,23 +299,106 @@ Run statuses: `running`, `completed`, `failed`, `paused`. Resume via `resume <ru
 - `{{#if expr}} ... {{#else}} ... {{/if}}` — conditional
 - `\${...}` — escaped (renders literal `${...}`)
 
-### Formatters (11 built-in)
+### Formatters (11 built-in + custom)
 
 `bullets`, `numbered`, `table`, `json`, `code`, `default`, `fixed`, `upper`, `lower`, `truncate`, `date`
 
+Custom formatters registered via `formattersEntry` config or `registerFormatter()` API.
+
 The `date` formatter accepts format args: `iso` (default), `date`, `time`, `datetime`, `short`, `long`, `relative`.
+
+### Additional Template Directives
+
+- `{{#include ./path.md}}` — include and evaluate a partial template
+- `{{#block name}} ... {{/block}}` — define an overridable block (for template inheritance)
+- `\${...}` — escaped (renders literal `${...}`)
 
 ### Document Files
 
 ```
 src/document/
-  contracts.ts       Type definitions (AST nodes, render scope, results)
-  parser.ts          Split .gr.md into frontmatter + template body
-  template-engine.ts Parse template to AST, evaluate against scope
-  formatters.ts      11 built-in formatters
-  renderer.ts        Orchestrate: parse → execute → render → persist
-  validation.ts      Pre-flight validation of template expressions and blocks
+  contracts.ts          Type definitions (AST nodes incl. IncludeNode, BlockNode, render scope, results)
+  parser.ts             Split .gr.md into frontmatter + template body, extract extends
+  template-engine.ts    Parse template to AST, evaluate against scope (includes, blocks, inheritance)
+  formatters.ts         11 built-in formatters + custom formatter registration API
+  custom-formatters.ts  Load custom formatters from config entry file
+  renderer.ts           Orchestrate: parse → resolve inheritance → execute → render → persist
+  validation.ts         Pre-flight validation of template expressions and blocks
 ```
+
+## Custom Formatters
+
+Define in `glyphrail.formatters.ts` (path configurable via `formattersEntry` in config):
+
+```typescript
+import { defineFormatters } from "glyphrail";
+export default defineFormatters([
+  {
+    name: "currency",
+    description: "Format number as currency",
+    format: (value, symbol = "$") => `${symbol}${Number(value).toFixed(2)}`
+  }
+]);
+```
+
+Programmatic registration:
+```typescript
+import { registerFormatter, registerFormatters } from "glyphrail";
+registerFormatter("myFmt", (value, ...args) => String(value));
+```
+
+## Template Includes
+
+`{{#include ./path/to/partial.md}}` includes a template file and evaluates it with the current scope. Path is resolved relative to the including document. Circular includes are detected and produce an error.
+
+```markdown
+{{#include ./partials/header.md}}
+
+# Content
+
+{{#include ./partials/footer.md}}
+```
+
+## Template Inheritance
+
+Documents can extend a base template using `extends:` in frontmatter. The base template defines `{{#block name}}...{{/block}}` regions. The child overrides blocks selectively.
+
+**Base template** (`base-report.gr.md`):
+```markdown
+{{#block header}}
+*Default header*
+{{/block}}
+
+{{#block content}}
+No content.
+{{/block}}
+```
+
+**Child template** (`weekly.gr.md`):
+```yaml
+---
+extends: ./base-report.gr.md
+# ... child workflow ...
+---
+{{#block content}}
+Overridden content here
+{{/block}}
+```
+
+Multi-level inheritance is supported. Child overrides take priority.
+
+## Obsidian Plugin
+
+Prototype at `obsidian-plugin/`. Desktop-only, calls `gr` CLI as subprocess.
+
+Commands:
+- **Render current .gr.md document** — executes workflow, shows rendered output in side panel
+- **Render and save as Markdown** — writes `.rendered.md` file
+- **Validate current .gr.md document** — validates without executing
+
+Settings: `grBinary` (CLI path), `autoRender` (on open), `outputFormat` (markdown/html).
+
+Build: `cd obsidian-plugin && npm install && npm run build`
 
 ## Not Yet Implemented
 

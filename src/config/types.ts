@@ -11,6 +11,7 @@ export interface GlyphrailConfig {
   workflowsDir: string;
   runsDir: string;
   toolsEntry: string;
+  formattersEntry?: string;
   defaultOutputMode: OutputMode;
   defaultCheckpointEveryStep: boolean;
   policies: GlyphrailPoliciesConfig;

@@ -100,6 +100,26 @@ formatters.set("truncate", (value: unknown, maxLength?: string): string => {
   return str.slice(0, limit) + "..."
 })
 
+export function registerFormatter(name: string, fn: Formatter): void {
+  formatters.set(name, fn)
+}
+
+export function registerFormatters(entries: FormatterDefinition[]): void {
+  for (const entry of entries) {
+    formatters.set(entry.name, entry.format)
+  }
+}
+
+export interface FormatterDefinition {
+  name: string
+  description?: string
+  format: Formatter
+}
+
+export function defineFormatters(defs: FormatterDefinition[]): FormatterDefinition[] {
+  return defs
+}
+
 export function getFormatter(name: string): Formatter | undefined {
   return formatters.get(name)
 }

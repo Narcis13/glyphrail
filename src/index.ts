@@ -21,10 +21,13 @@ export type {
   TemplateNode,
   TemplateIssue,
   EachBlockNode,
-  IfBlockNode
+  IfBlockNode,
+  IncludeNode,
+  BlockNode
 } from "./document/contracts";
 export { parseGrDocument } from "./document/parser";
-export { parseTemplate, evaluateTemplate } from "./document/template-engine";
+export { parseTemplate, evaluateTemplate, type EvaluateTemplateOptions } from "./document/template-engine";
 export { validateTemplate } from "./document/validation";
-export { renderDocument, reRenderFromRun } from "./document/renderer"
+export { renderDocument, reRenderFromRun } from "./document/renderer";
+export { defineFormatters, registerFormatter, registerFormatters, type Formatter, type FormatterDefinition } from "./document/formatters";
 export { markdownToHtml } from "./cli/commands/render";

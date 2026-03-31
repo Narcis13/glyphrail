@@ -3,6 +3,7 @@
   "workflowsDir": "./workflows",
   "runsDir": "./.glyphrail/runs",
   "toolsEntry": "./glyphrail.tools.ts",
+  "formattersEntry": "./glyphrail.formatters.ts",
   "defaultOutputMode": "pretty",
   "defaultCheckpointEveryStep": true,
   "policies": {

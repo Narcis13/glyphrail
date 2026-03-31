@@ -1,0 +1,10 @@
+{
+  "id": "glyphrail",
+  "name": "Glyphrail",
+  "version": "0.1.0",
+  "minAppVersion": "1.0.0",
+  "description": "Execute and render .gr.md documents — living Markdown powered by deterministic workflows.",
+  "author": "Glyphrail",
+  "authorUrl": "https://github.com/Narcis13/glyphrail",
+  "isDesktopOnly": true
+}

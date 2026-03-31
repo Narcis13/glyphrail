@@ -31,12 +31,26 @@ export interface IfBlockNode {
   line: number
 }
 
-export type TemplateNode = TextNode | InterpolationNode | EachBlockNode | IfBlockNode
+export interface IncludeNode {
+  type: "include"
+  filePath: string
+  line: number
+}
+
+export interface BlockNode {
+  type: "block"
+  name: string
+  body: TemplateNode[]
+  line: number
+}
+
+export type TemplateNode = TextNode | InterpolationNode | EachBlockNode | IfBlockNode | IncludeNode | BlockNode
 
 export interface ParsedGrDocument {
   frontmatterRaw: string
   templateBody: string
   filePath: string
+  extends?: string
 }
 
 export interface DocumentRenderScope {

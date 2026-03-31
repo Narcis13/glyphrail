@@ -47,9 +47,19 @@ export function parseGrDocument(content: string, filePath: string): ParsedGrDocu
     )
   }
 
+  // Extract extends directive from frontmatter
+  const extendsMatch = frontmatterRaw.match(/^extends:\s*(.+)$/m)
+  const extendsPath = extendsMatch ? (extendsMatch[1] as string).trim().replace(/^["']|["']$/g, "") : undefined
+
+  // Strip extends from frontmatter before workflow validation (it's not a workflow field)
+  const cleanedFrontmatter = extendsPath
+    ? frontmatterRaw.replace(/^extends:\s*.+$/m, "").trim()
+    : frontmatterRaw
+
   return {
-    frontmatterRaw,
+    frontmatterRaw: cleanedFrontmatter,
     templateBody,
-    filePath
+    filePath,
+    extends: extendsPath
   }
 }
