@@ -1,0 +1,72 @@
+version: "1.0"
+name: claude-code-agent-demo
+description: >
+  Demonstrates the claude-code agent adapter. Uses Claude Code in headless
+  mode (claude --print) to perform a structured AI task within a deterministic
+  workflow. Requires the `claude` CLI to be installed and authenticated.
+
+inputSchema:
+  type: object
+  properties:
+    topic:
+      type: string
+      minLength: 1
+  required:
+    - topic
+
+policies:
+  maxRunSteps: 10
+  maxRunDurationMs: 120000
+
+state:
+  analysis: null
+
+steps:
+  - id: analyze
+    kind: agent
+    mode: structured
+    provider: claude-code
+    model: sonnet
+    objective: "Analyze the given topic and produce a structured summary"
+    instructions: |
+      You are a research assistant. Analyze the provided topic and return
+      a JSON object with exactly these fields:
+      - summary: A 2-3 sentence overview
+      - keyPoints: An array of 3 key points (strings)
+      - sentiment: One of "positive", "negative", or "neutral"
+    input:
+      topic: ${input.topic}
+    outputSchema:
+      type: object
+      properties:
+        summary:
+          type: string
+        keyPoints:
+          type: array
+          items:
+            type: string
+          minItems: 3
+          maxItems: 3
+        sentiment:
+          type: string
+          enum:
+            - positive
+            - negative
+            - neutral
+      required:
+        - summary
+        - keyPoints
+        - sentiment
+    save: state.analysis
+    timeoutMs: 60000
+    onError:
+      strategy: retry
+      maxAttempts: 2
+    meta:
+      maxTurns: 1
+
+  - id: done
+    kind: return
+    output:
+      topic: ${input.topic}
+      analysis: ${state.analysis}

@@ -1,0 +1,1 @@
+> **${output.title}** — powered by Glyphrail Documents

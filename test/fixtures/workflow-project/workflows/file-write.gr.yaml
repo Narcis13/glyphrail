@@ -1,0 +1,21 @@
+version: "1.0"
+name: file-write-demo
+description: Write a disposable runtime file
+
+state:
+  writeResult: null
+
+steps:
+  - id: write_runtime_file
+    kind: tool
+    tool: fileWrite
+    input:
+      path: .glyphrail/runtime/file-write/output.txt
+      content: glyphrail-write-ok
+    save: state.writeResult
+
+  - id: done
+    kind: return
+    output:
+      path: ${state.writeResult.path}
+      bytesWritten: ${state.writeResult.bytesWritten}

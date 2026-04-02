@@ -1,0 +1,37 @@
+version: "1.0"
+name: conditional-demo
+description: Workflow with a deterministic branch
+
+state:
+  score: 2
+  flags:
+    enough: false
+  result: null
+
+steps:
+  - id: branch_on_score
+    kind: if
+    condition: ${state.score == 2}
+    then:
+      - id: set_true
+        kind: assign
+        set:
+          flags.enough: true
+    else:
+      - id: set_false
+        kind: assign
+        set:
+          flags.enough: false
+
+  - id: select
+    kind: tool
+    tool: selectVendor
+    input:
+      goal: "pick vendor"
+    save: state.result
+
+  - id: done
+    kind: return
+    output:
+      enough: ${state.flags.enough}
+      result: ${state.result}

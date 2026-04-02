@@ -1,0 +1,22 @@
+version: "1.0"
+name: while-success-demo
+description: Workflow that exits a bounded while loop successfully
+
+state:
+  count: 0
+
+steps:
+  - id: count_up
+    kind: while
+    condition: ${state.count != 3}
+    maxIterations: 5
+    steps:
+      - id: increment
+        kind: assign
+        set:
+          count: ${state.count + 1}
+
+  - id: done
+    kind: return
+    output:
+      count: ${state.count}

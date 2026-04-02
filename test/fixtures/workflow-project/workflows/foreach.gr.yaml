@@ -1,0 +1,27 @@
+version: "1.0"
+name: foreach-demo
+description: Workflow that aggregates greetings via for_each
+
+state:
+  names:
+    - Ada
+    - Grace
+  greetings: []
+
+steps:
+  - id: greet_each
+    kind: for_each
+    items: ${state.names}
+    as: name
+    steps:
+      - id: greet_item
+        kind: tool
+        tool: makeGreeting
+        input:
+          name: ${item}
+        append: state.greetings
+
+  - id: done
+    kind: return
+    output:
+      greetings: ${state.greetings}

@@ -1,0 +1,28 @@
+version: "1.0"
+name: fetch-demo
+description: Call a local HTTP fixture endpoint
+
+state:
+  response: null
+
+steps:
+  - id: call_fixture
+    kind: tool
+    tool: fetch
+    input:
+      url: ${input.url}
+      method: POST
+      query:
+        source: workflow
+      body:
+        greeting: hello
+    save: state.response
+
+  - id: done
+    kind: return
+    output:
+      status: ${state.response.status}
+      ok: ${state.response.ok}
+      method: ${state.response.body.method}
+      querySource: ${state.response.body.query.source}
+      echoedGreeting: ${state.response.body.body.greeting}

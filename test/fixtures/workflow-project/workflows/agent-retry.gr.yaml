@@ -1,0 +1,38 @@
+version: "1.0"
+name: agent-retry-demo
+description: Structured agent step that retries once and then succeeds
+
+state:
+  decision: null
+
+steps:
+  - id: analyze
+    kind: agent
+    mode: structured
+    provider: mock
+    model: mock
+    objective: Pick the best vendor
+    input:
+      goal: retry-demo
+    outputSchema:
+      type: object
+      properties:
+        choice:
+          type: string
+      required: [choice]
+      additionalProperties: false
+    save: state.decision
+    onError:
+      strategy: retry
+      maxAttempts: 2
+    meta:
+      mockResponses:
+        - output:
+            choice: 42
+        - output:
+            choice: vendor-a
+
+  - id: done
+    kind: return
+    output:
+      decision: ${state.decision}

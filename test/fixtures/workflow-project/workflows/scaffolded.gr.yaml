@@ -1,0 +1,25 @@
+version: "1.0"
+name: scaffolded-tool-demo
+description: Workflow that uses an imported scaffold-style tool
+
+state:
+  raw: null
+  handle: null
+
+steps:
+  - id: init
+    kind: assign
+    set:
+      raw: ${input.value}
+
+  - id: normalize
+    kind: tool
+    tool: formatHandle
+    input:
+      value: ${state.raw}
+    save: state.handle
+
+  - id: done
+    kind: return
+    output:
+      handle: ${state.handle.handle}

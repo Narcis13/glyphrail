@@ -1,0 +1,53 @@
+{
+  "name": "glyphrail",
+  "version": "0.2.0",
+  "description": "CLI-first workflow orchestration for deterministic, AI-native runs",
+  "keywords": [
+    "workflow",
+    "cli",
+    "agent",
+    "orchestration",
+    "bun"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Narcis13/glyphrail.git"
+  },
+  "homepage": "https://github.com/Narcis13/glyphrail#readme",
+  "bugs": {
+    "url": "https://github.com/Narcis13/glyphrail/issues"
+  },
+  "type": "module",
+  "types": "./src/index.ts",
+  "files": [
+    "bin",
+    "src",
+    "templates",
+    "README.md",
+    "LICENSE",
+    "bunfig.toml"
+  ],
+  "exports": {
+    ".": "./src/index.ts",
+    "./cli": "./src/cli/index.ts"
+  },
+  "bin": {
+    "glyphrail": "./bin/glyphrail",
+    "gr": "./bin/gr"
+  },
+  "scripts": {
+    "dev": "bun run src/cli/index.ts",
+    "release": "node scripts/release.mjs",
+    "release:patch": "node scripts/release.mjs patch",
+    "release:minor": "node scripts/release.mjs minor",
+    "release:major": "node scripts/release.mjs major",
+    "test": "bun test",
+    "check:package": "npm pack --dry-run",
+    "prepublishOnly": "bun test && npm run check:package"
+  },
+  "engines": {
+    "node": ">=18",
+    "bun": ">=1.3.0"
+  }
+}

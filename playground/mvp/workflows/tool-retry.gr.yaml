@@ -1,0 +1,23 @@
+version: "1.0"
+name: tool-retry-demo
+description: Tool step that retries once after a transient runtime failure
+
+state:
+  greeting: null
+
+steps:
+  - id: flaky_greet
+    kind: tool
+    tool: failOnceGreeting
+    input:
+      name: Ada
+      failMessage: Temporary greeting failure
+    save: state.greeting
+    onError:
+      strategy: retry
+      maxAttempts: 2
+
+  - id: done
+    kind: return
+    output:
+      greeting: ${state.greeting}

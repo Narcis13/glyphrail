@@ -1,0 +1,15 @@
+version: "1.0"
+name: while-max-iterations-demo
+description: Workflow that exhausts while loop iterations
+
+state:
+  count: 0
+
+steps:
+  - id: stuck_loop
+    kind: while
+    condition: ${state.count == 0}
+    maxIterations: 2
+    steps:
+      - id: wait
+        kind: noop

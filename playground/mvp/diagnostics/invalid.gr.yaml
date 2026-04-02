@@ -1,0 +1,20 @@
+version: "1.0"
+name: invalid-demo
+
+state:
+  value: null
+
+steps:
+  - id: duplicate
+    kind: while
+    condition: ${state.value == null}
+    steps:
+      - id: nested
+        kind: assign
+        set:
+          value: "set"
+
+  - id: duplicate
+    kind: tool
+    tool: unknownTool
+    save: result
